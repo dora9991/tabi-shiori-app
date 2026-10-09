@@ -1,0 +1,2245 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>html{box-sizing:border-box;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style></head><body><title>たびしおり</title>
+<style id="tabi-css">/* レイアウト：1画面のアプリ。上に旅の名前と「何日目」のチップ、中央に日程（路線図のような縦の線と駅の丸）、下にタブ。
+   広い画面ではタブが上に移り、予定の詳細は右のパネルになる。色は紺を基調に、予定の種類ごとに路線の色を割り当てる。 */
+:root {
+  --bg: #f1f3f8;
+  --surface: #ffffff;
+  --surface-2: #e7ebf2;
+  --field: #f5f7fa;
+  --ink: #161d2b;
+  --ink-2: #4b586f;
+  --ink-3: #7c889e;
+  --line: #d4dae5;
+  --brand: #1c3a74;
+  --brand-ink: #ffffff;
+  --brand-soft: #dde6f7;
+  --now: #d43f27;
+  --c-move: #2460c4;
+  --c-food: #c2570f;
+  --c-stay: #7044b6;
+  --c-spot: #157a55;
+  --c-other: #5a667c;
+  --on-c: #ffffff;
+  --warn: #9a4a05;
+  --warn-bg: #fcefd8;
+  --warn-line: #efc88a;
+  --ok: #157a55;
+  --danger: #c0321f;
+  --scrim: rgba(10, 16, 28, .46);
+  --shadow: 0 1px 2px rgba(18, 28, 48, .07), 0 8px 24px rgba(18, 28, 48, .10);
+  --font: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+  --num: "DIN Alternate", "Avenir Next", "Helvetica Neue", "Roboto", "Hiragino Sans", sans-serif;
+  --r: 12px;
+  --hour: 56px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e121a; --surface: #181e2b; --surface-2: #242c3d; --field: #111622;
+    --ink: #e9edf5; --ink-2: #aab4c8; --ink-3: #78849b; --line: #2c3548;
+    --brand: #9cb9f8; --brand-ink: #0c1526; --brand-soft: #212f4c;
+    --now: #ff735c;
+    --c-move: #6fa1f6; --c-food: #f0985b; --c-stay: #b297ef; --c-spot: #55c698; --c-other: #9ba7bc;
+    --on-c: #0d1422;
+    --warn: #f3b860; --warn-bg: #372a11; --warn-line: #6b5120;
+    --ok: #55c698; --danger: #ff8573;
+    --scrim: rgba(0, 0, 0, .6);
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .45);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e121a; --surface: #181e2b; --surface-2: #242c3d; --field: #111622;
+  --ink: #e9edf5; --ink-2: #aab4c8; --ink-3: #78849b; --line: #2c3548;
+  --brand: #9cb9f8; --brand-ink: #0c1526; --brand-soft: #212f4c;
+  --now: #ff735c;
+  --c-move: #6fa1f6; --c-food: #f0985b; --c-stay: #b297ef; --c-spot: #55c698; --c-other: #9ba7bc;
+  --on-c: #0d1422;
+  --warn: #f3b860; --warn-bg: #372a11; --warn-line: #6b5120;
+  --ok: #55c698; --danger: #ff8573;
+  --scrim: rgba(0, 0, 0, .6);
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .45);
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { height: 100%; box-sizing: border-box; -webkit-text-size-adjust: 100%; }
+body {
+  height: 100%; margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.55 var(--font); overflow: hidden; overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+a { color: var(--brand); }
+[hidden] { display: none !important; }
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.ic { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.num { font-family: var(--num); font-variant-numeric: tabular-nums; }
+.cat-move { --c: var(--c-move); } .cat-food { --c: var(--c-food); } .cat-stay { --c: var(--c-stay); }
+.cat-spot { --c: var(--c-spot); } .cat-other { --c: var(--c-other); }
+
+/* ---------- 全体の枠 ---------- */
+.app { height: 100%; display: flex; flex-direction: column; min-width: 0; }
+.hdr { flex: none; background: var(--surface); border-bottom: 1px solid var(--line); z-index: 5; }
+.hdr-top { display: flex; align-items: center; gap: 6px; padding: 8px 8px 6px 16px; min-height: 56px; }
+.trip-btn {
+  flex: 1 1 auto; min-width: 0; display: grid; text-align: left; background: none; border: 0; padding: 4px 6px 4px 0; border-radius: 10px;
+}
+.trip-name { font-weight: 700; font-size: 18px; line-height: 1.25; display: flex; align-items: center; gap: 4px; min-width: 0; }
+.trip-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.trip-name .ic { width: 16px; height: 16px; color: var(--ink-3); }
+.trip-meta { font-size: 12px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hdr-actions { flex: none; display: flex; align-items: center; gap: 2px; }
+.icon-btn {
+  width: 40px; height: 40px; border: 0; background: none; border-radius: 10px; display: grid; place-items: center; color: var(--ink-2); flex: none;
+}
+.icon-btn:hover { background: var(--surface-2); }
+.icon-btn:disabled { opacity: .35; cursor: default; background: none; }
+.mode {
+  display: inline-flex; align-items: center; gap: 5px; height: 36px; padding: 0 12px 0 10px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--surface); font-size: 13px; font-weight: 700; color: var(--ink-2); white-space: nowrap;
+}
+.mode .ic { width: 16px; height: 16px; }
+.mode[aria-pressed="true"] { background: var(--brand); border-color: var(--brand); color: var(--brand-ink); }
+
+.chips { display: flex; gap: 6px; overflow-x: auto; padding: 2px 16px 10px; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chip {
+  flex: none; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 12px; min-height: 34px;
+  font-size: 13px; color: var(--ink-2); display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap;
+}
+.chip b { font-weight: 700; color: var(--ink); }
+.chip.hol i, .chip.sun i { color: var(--now); }
+.chip.sat i { color: var(--c-move); }
+.chip i { font-style: normal; }
+.chip[aria-current="true"] { background: var(--brand-soft); border-color: var(--brand); }
+.chip[aria-current="true"] b { color: var(--brand); }
+
+.tabs { display: flex; }
+.tab {
+  flex: 1; border: 0; background: none; display: grid; justify-items: center; gap: 1px; padding: 7px 4px 6px; font-size: 11px; font-weight: 700;
+  color: var(--ink-3); min-height: 52px; white-space: nowrap;
+}
+.tab .ic { width: 22px; height: 22px; }
+.tab[aria-current="page"] { color: var(--brand); }
+.tabs-bottom {
+  flex: none; background: var(--surface); border-top: 1px solid var(--line); z-index: 5;
+}
+.tabs-top { display: none; }
+
+.banner {
+  flex: none; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 16px; font-size: 13px;
+  background: var(--warn-bg); color: var(--warn); border-bottom: 1px solid var(--warn-line);
+}
+.banner p { margin: 0; flex: 1 1 200px; min-width: 0; }
+.banner .btn { min-height: 34px; padding: 4px 12px; font-size: 13px; }
+
+.main { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; position: relative; outline: none; }
+.main[data-tab="grid"] { overflow: auto; }
+.wrap { max-width: 760px; margin: 0 auto; padding: 0 16px 96px; }
+
+.fab {
+  position: fixed; right: 16px; bottom: calc(68px + env(safe-area-inset-bottom, 0px)); z-index: 6;
+  height: 52px; padding: 0 20px 0 16px; border: 0; border-radius: 999px; background: var(--brand); color: var(--brand-ink);
+  font-weight: 700; font-size: 15px; display: inline-flex; align-items: center; gap: 6px; box-shadow: var(--shadow);
+}
+.fab .ic { width: 22px; height: 22px; stroke-width: 2.2; }
+
+/* ---------- 日程（リスト）---------- */
+.next {
+  margin: 14px 0 2px; padding: 12px 14px; border-radius: var(--r); background: var(--brand); color: var(--brand-ink);
+  display: grid; gap: 2px; border: 0; width: 100%; text-align: left;
+}
+.next small { font-size: 12px; opacity: .85; font-weight: 700; letter-spacing: .04em; }
+.next strong { font-size: 17px; line-height: 1.35; }
+.next span { font-size: 13px; opacity: .9; }
+
+.day { padding-bottom: 6px; }
+.day-h {
+  position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 14px 0 6px;
+  display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; column-gap: 10px;
+}
+.day-n { font-weight: 700; font-size: 12px; color: var(--brand-ink); background: var(--brand); border-radius: 6px; padding: 2px 8px; letter-spacing: .04em; }
+.day-d { font-weight: 700; font-size: 18px; white-space: nowrap; }
+.day-d.sun, .day-d.hol { color: var(--now); }
+.day-d.sat { color: var(--c-move); }
+.day-hol { font-size: 12px; color: var(--now); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.day-t {
+  grid-column: 1 / 4; grid-row: 2; min-width: 0; font-size: 13px; color: var(--ink-2); background: none; border: 0; padding: 3px 0 0; text-align: left;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-height: 24px;
+}
+span.day-t:empty { display: none; }
+button.day-t:hover { color: var(--brand); }
+.day-t.empty { color: var(--ink-3); }
+.day-add { grid-column: 4; grid-row: 1 / span 2; }
+
+.tl { list-style: none; margin: 0; padding: 0; }
+.ev, .gap { display: grid; grid-template-columns: 46px 30px minmax(0, 1fr); column-gap: 6px; position: relative; }
+.ev-time { text-align: right; padding-top: 13px; line-height: 1.15; }
+.ev-time b { display: block; font-size: 17px; font-weight: 600; letter-spacing: .01em; }
+.ev-time span { display: block; font-size: 12px; color: var(--ink-3); }
+.ev-time .none { font-size: 11px; color: var(--ink-3); font-family: var(--font); padding-top: 4px; }
+.rail { position: relative; display: flex; justify-content: center; }
+.rail::before { content: ""; position: absolute; top: 0; bottom: 0; width: 3px; border-radius: 2px; background: var(--line); }
+.ev:first-child .rail::before { top: 14px; }
+.ev:last-child .rail::before { bottom: calc(100% - 30px); }
+.dot {
+  position: relative; margin-top: 9px; width: 30px; height: 30px; border-radius: 50%; background: var(--c); color: var(--on-c);
+  display: grid; place-items: center; box-shadow: 0 0 0 3px var(--bg);
+}
+.dot .ic { width: 17px; height: 17px; }
+.ev-card {
+  display: block; width: 100%; text-align: left; margin: 4px 0; padding: 10px 12px; border-radius: var(--r);
+  background: var(--surface); border: 1px solid var(--line); min-height: 48px;
+}
+.ev-card:hover { border-color: var(--c); }
+.cat-move > .ev-card { background: color-mix(in srgb, var(--c) 8%, var(--bg)); border-color: transparent; }
+.ev-title { font-weight: 700; font-size: 15.5px; line-height: 1.4; overflow-wrap: anywhere; }
+.ev-sub { font-size: 13px; color: var(--ink-2); overflow-wrap: anywhere; margin-top: 1px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.ev-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.ev-tags:empty { display: none; }
+.tag {
+  display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; font-weight: 700; line-height: 1; padding: 4px 8px; border-radius: 999px;
+  background: var(--surface-2); color: var(--ink-2); white-space: nowrap;
+}
+.tag .ic { width: 12px; height: 12px; stroke-width: 2.2; }
+.tag.warn { background: var(--warn-bg); color: var(--warn); }
+.tag.done { background: color-mix(in srgb, var(--ok) 14%, var(--surface)); color: var(--ok); }
+.tag.now { background: var(--now); color: var(--on-c); }
+.ev.is-past > .ev-time, .ev.is-past > .ev-card { opacity: .55; }
+.ev.is-now > .ev-card { border-color: var(--now); box-shadow: 0 0 0 1px var(--now); }
+.ev-more { display: none; }
+
+.gap { min-height: 22px; align-items: center; }
+.gap-t { font-size: 12px; color: var(--ink-3); display: flex; align-items: center; gap: 8px; padding: 1px 2px; }
+.gap-t.over { color: var(--danger); font-weight: 700; }
+.gap-add {
+  border: 1px dashed var(--line); background: none; border-radius: 999px; height: 26px; padding: 0 10px 0 6px; font-size: 12px; color: var(--ink-2);
+  display: inline-flex; align-items: center; gap: 2px;
+}
+.gap-add .ic { width: 14px; height: 14px; }
+.gap-add:hover { border-color: var(--brand); color: var(--brand); }
+.empty-day {
+  border: 1px dashed var(--line); border-radius: var(--r); padding: 18px 14px; color: var(--ink-3); font-size: 14px;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+}
+.list-foot { display: flex; gap: 8px; flex-wrap: wrap; padding: 18px 0 0; }
+
+/* ---------- 時間割 ---------- */
+.grid-tools { position: sticky; left: 0; display: flex; align-items: center; gap: 8px; padding: 8px 16px 6px; font-size: 12px; color: var(--ink-3); }
+.grid-tools p { margin: 0; flex: 1; min-width: 0; }
+.grid {
+  --colw: calc((100vw - 60px) / 2.15);
+  display: grid; grid-template-columns: 44px repeat(var(--n), minmax(var(--colw), 1fr)); min-width: min-content; padding-bottom: 96px;
+}
+.g-corner, .g-dayh { position: sticky; top: 0; z-index: 3; background: var(--bg); border-bottom: 1px solid var(--line); }
+.g-corner { left: 0; z-index: 4; }
+.g-dayh { padding: 6px 8px 7px; border-left: 1px solid var(--line); display: grid; gap: 0; line-height: 1.3; min-width: 0; }
+.g-dayh b { font-size: 11px; color: var(--brand); letter-spacing: .04em; }
+.g-dayh span { font-size: 15px; font-weight: 700; }
+.g-dayh.sun span, .g-dayh.hol span { color: var(--now); }
+.g-dayh.sat span { color: var(--c-move); }
+.g-dayh small { font-size: 10.5px; color: var(--now); font-weight: 700; min-height: 0; }
+.g-dayh.today { background: var(--brand-soft); }
+.g-allc, .g-all { background: var(--bg); border-bottom: 1px solid var(--line); min-height: 8px; }
+.g-allc { position: sticky; left: 0; z-index: 2; font-size: 10px; color: var(--ink-3); text-align: right; padding: 5px 5px 0 0; }
+.g-all { border-left: 1px solid var(--line); padding: 3px; display: grid; gap: 3px; align-content: start; }
+.g-chip {
+  border: 0; border-left: 3px solid var(--c); border-radius: 6px; background: color-mix(in srgb, var(--c) 16%, var(--surface));
+  font-size: 12px; font-weight: 700; text-align: left; padding: 3px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+.g-axis { position: sticky; left: 0; z-index: 2; background: var(--bg); height: calc(var(--rows) * var(--hour)); }
+.g-axis span { position: absolute; right: 6px; transform: translateY(-50%); font-size: 11px; color: var(--ink-3); }
+.g-col {
+  position: relative; height: calc(var(--rows) * var(--hour));
+  border-left: 1px solid var(--line);
+  background-image: linear-gradient(to bottom, var(--line) 0, var(--line) 1px, transparent 1px);
+  background-size: 100% var(--hour);
+}
+.g-ev {
+  position: absolute; border-radius: 7px; padding: 2px 5px 2px 6px; overflow: hidden; text-align: left;
+  background: color-mix(in srgb, var(--c) 17%, var(--surface)); border: 0; border-left: 3px solid var(--c);
+  font-size: 12px; line-height: 1.3; color: var(--ink); user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; box-shadow: 0 0 0 1px var(--bg);
+}
+.g-ev b { font-weight: 700; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--lines, 1); overflow: hidden; flex: none; }
+.g-ev span { display: block; font-size: 11px; color: var(--ink-2); white-space: nowrap; flex: none; }
+.g-ev.short span { display: none; }
+@keyframes flash { 0% { box-shadow: 0 0 0 0 var(--brand); } 25% { box-shadow: 0 0 0 5px var(--brand-soft); } 100% { box-shadow: 0 0 0 0 transparent; } }
+.ev.flash > .ev-card, .g-ev.flash { animation: flash 1.4s ease-out; }
+.g-ev.tent { border-left-style: dashed; }
+.g-ev.warn b { padding-right: 15px; }
+.g-ev.warn::after { content: "!"; position: absolute; top: 2px; right: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--warn); color: var(--surface); font-size: 10px; font-weight: 700; display: grid; place-items: center; }
+.g-ev.dragging { z-index: 10; box-shadow: var(--shadow); opacity: .94; outline: 2px solid var(--c); cursor: grabbing; }
+.g-grip { position: absolute; left: 0; right: 0; bottom: 0; height: 12px; cursor: ns-resize; touch-action: none; }
+.g-grip::after { content: ""; position: absolute; left: 50%; bottom: 2px; width: 22px; height: 3px; margin-left: -11px; border-radius: 2px; background: var(--c); opacity: .55; }
+.app[data-edit="0"] .g-grip { display: none; }
+.g-now { position: absolute; left: 0; right: 0; height: 0; border-top: 2px solid var(--now); z-index: 5; pointer-events: none; }
+.g-now::before { content: ""; position: absolute; left: -4px; top: -5px; width: 8px; height: 8px; border-radius: 50%; background: var(--now); }
+.g-tip {
+  position: fixed; z-index: 30; pointer-events: none; background: var(--ink); color: var(--bg); font-size: 13px; font-weight: 700;
+  padding: 4px 9px; border-radius: 8px; transform: translate(-50%, -140%); white-space: nowrap;
+}
+
+/* ---------- まとめ ---------- */
+.sum { display: grid; gap: 22px; padding-top: 16px; }
+.sum h2 { font-size: 15px; margin: 0 0 8px; display: flex; align-items: center; gap: 8px; }
+.sum h2 small { font-weight: 400; color: var(--ink-3); font-size: 12px; }
+.sum-note { white-space: pre-wrap; color: var(--ink-2); font-size: 14px; margin: 0; overflow-wrap: anywhere; }
+.rows { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.rows > li { border-top: 1px solid var(--line); }
+.rows > li:first-child { border-top: 0; }
+.row {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; width: 100%; text-align: left;
+  background: none; border: 0; padding: 10px 12px; min-height: 48px;
+}
+button.row:hover { background: var(--field); }
+.row .dot { margin: 0; width: 26px; height: 26px; box-shadow: none; }
+.row .dot .ic { width: 15px; height: 15px; }
+.row-t { font-weight: 700; font-size: 14.5px; overflow-wrap: anywhere; }
+.row-s { font-size: 12.5px; color: var(--ink-2); overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.row-r { font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+.row.warn-row .row-s { color: var(--warn); }
+.todo-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 4px; padding: 2px 4px 2px 12px; min-height: 48px; }
+.todo-row label { display: contents; }
+.todo-row input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--brand); margin: 0 6px 0 0; }
+.todo-row span { font-size: 14.5px; overflow-wrap: anywhere; padding: 8px 0; }
+.todo-row input:checked ~ span { color: var(--ink-3); text-decoration: line-through; }
+.todo-add { display: flex; gap: 8px; margin-top: 8px; }
+.todo-add input { flex: 1; min-width: 0; }
+.cost-bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--surface-2); margin: 8px 0 6px; }
+.cost-bar i { background: var(--c); min-width: 2px; }
+.cost-leg { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; color: var(--ink-2); }
+.cost-leg span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--c); margin-right: 5px; }
+.big { font-family: var(--num); font-size: 26px; font-weight: 600; }
+.muted { color: var(--ink-3); font-size: 13.5px; margin: 0; }
+
+/* ---------- ボタン・入力 ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 8px 16px; border-radius: 11px;
+  border: 1px solid var(--line); background: var(--surface); font-weight: 700; font-size: 14.5px; color: var(--ink); text-decoration: none;
+  white-space: nowrap;
+}
+.btn:hover { border-color: var(--ink-3); }
+.btn .ic { width: 18px; height: 18px; }
+.btn.primary { background: var(--brand); border-color: var(--brand); color: var(--brand-ink); }
+.btn.danger { color: var(--danger); }
+.btn.small { min-height: 36px; padding: 4px 12px; font-size: 13px; border-radius: 9px; }
+.btn.grow { flex: 1 1 0; }
+.btn:disabled { opacity: .45; cursor: default; }
+.field { display: grid; gap: 4px; margin-top: 12px; min-width: 0; }
+.field > span, .legend { font-size: 12.5px; font-weight: 700; color: var(--ink-2); }
+.field small { font-size: 12px; color: var(--ink-3); }
+input[type="text"], input[type="time"], input[type="date"], input[type="number"], input[type="url"], input[type="tel"], select, textarea {
+  width: 100%; min-width: 0; min-height: 44px; padding: 9px 11px; border-radius: 10px; border: 1px solid var(--line); background: var(--field);
+  font-size: 16px; -webkit-appearance: none; appearance: none;
+}
+select { background-image: linear-gradient(45deg, transparent 50%, var(--ink-3) 50%), linear-gradient(135deg, var(--ink-3) 50%, transparent 50%); background-position: calc(100% - 17px) 19px, calc(100% - 12px) 19px; background-size: 5px 5px; background-repeat: no-repeat; padding-right: 30px; }
+textarea { min-height: 84px; resize: vertical; line-height: 1.5; }
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand); outline-offset: 0; border-color: transparent; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg label { position: relative; }
+.seg input { position: absolute; opacity: 0; inset: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.seg span {
+  display: inline-flex; align-items: center; gap: 5px; min-height: 38px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--surface); font-size: 13.5px; font-weight: 700; color: var(--ink-2);
+}
+.seg span .ic { width: 16px; height: 16px; }
+.seg input:checked + span { background: var(--c, var(--brand)); border-color: var(--c, var(--brand)); color: var(--on-c); }
+.seg.plain input:checked + span { background: var(--brand); border-color: var(--brand); color: var(--brand-ink); }
+.seg input:focus-visible + span { outline: 2px solid var(--brand); outline-offset: 2px; }
+.check { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 14.5px; }
+.check input { width: 22px; height: 22px; accent-color: var(--brand); margin: 0; }
+.quick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.quick button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; min-height: 32px; padding: 2px 11px; font-size: 12.5px; color: var(--ink-2); }
+.quick button:hover { border-color: var(--brand); color: var(--brand); }
+.group { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 4px; }
+.group > summary {
+  list-style: none; cursor: pointer; font-weight: 700; font-size: 14.5px; padding: 10px 0 4px; display: flex; align-items: center; gap: 6px;
+}
+.group > summary::-webkit-details-marker { display: none; }
+.group > summary::after { content: ""; margin-left: auto; width: 8px; height: 8px; border-right: 2px solid var(--ink-3); border-bottom: 2px solid var(--ink-3); transform: rotate(45deg); transition: transform .15s; }
+.group[open] > summary::after { transform: rotate(-135deg); }
+.group > summary small { font-weight: 400; color: var(--ink-3); font-size: 12px; }
+.place-f { border: 1px solid var(--line); border-radius: var(--r); padding: 2px 12px 12px; margin-top: 10px; }
+.place-f-h { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; font-size: 12.5px; font-weight: 700; color: var(--ink-2); }
+.only-move, .only-timed { display: none; }
+form[data-cat="move"] .only-move, form[data-allday="0"] .only-timed { display: block; }
+.err { color: var(--danger); font-size: 13px; font-weight: 700; margin: 8px 0 0; }
+
+/* ---------- シート（下から出る／広い画面では右パネル）---------- */
+.scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 40; animation: fade .16s ease-out; }
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 41; max-height: 92%; display: flex; flex-direction: column;
+  background: var(--surface); border-radius: 18px 18px 0 0; box-shadow: var(--shadow); animation: up .2s ease-out;
+  padding-bottom: env(safe-area-inset-bottom, 0px); outline: none;
+}
+.sheet.tall { height: 92%; }
+.sheet-head { flex: none; display: flex; align-items: center; gap: 4px; padding: 10px 8px 6px 16px; min-height: 52px; }
+.sheet-head h2 { flex: 1; min-width: 0; margin: 0; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 16px 18px; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+.sheet-foot { flex: none; display: flex; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--line); }
+.sheet-foot .btn { padding-left: 10px; padding-right: 10px; min-width: 48px; }
+@keyframes up { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes side { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* 詳細 */
+.d-cat { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; color: var(--c); }
+.d-cat .dot { margin: 0; width: 24px; height: 24px; box-shadow: none; }
+.d-cat .dot .ic { width: 14px; height: 14px; }
+.d-title { font-size: 21px; line-height: 1.35; margin: 8px 0 4px; overflow-wrap: anywhere; text-wrap: balance; }
+.d-when { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; color: var(--ink-2); font-size: 14px; }
+.d-when .num { font-size: 22px; font-weight: 600; color: var(--ink); }
+.d-warn {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; margin-top: 12px; padding: 10px 12px; border-radius: var(--r);
+  background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-line); font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.d-sec { margin-top: 16px; }
+.d-sec > h3 { font-size: 12.5px; color: var(--ink-3); margin: 0 0 6px; font-weight: 700; letter-spacing: .04em; }
+.route { position: relative; display: grid; gap: 4px; margin-bottom: 4px; }
+.route::before { content: ""; position: absolute; left: 4.5px; top: 16px; bottom: 16px; width: 3px; border-radius: 2px; background: var(--c); }
+.route-p { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 10px; align-items: center; min-height: 32px; }
+.route-p i { position: relative; width: 12px; height: 12px; border-radius: 50%; border: 3px solid var(--c); background: var(--surface); }
+.route-p b { font-size: 16px; overflow-wrap: anywhere; }
+.route-p span { color: var(--ink-2); font-size: 15px; }
+.kv { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 2px 8px; align-items: start; padding: 5px 0; font-size: 14.5px; }
+.kv .ic { width: 18px; height: 18px; color: var(--ink-3); margin-top: 2px; }
+.kv div { overflow-wrap: anywhere; white-space: pre-wrap; user-select: text; -webkit-user-select: text; }
+.kv small { display: block; color: var(--ink-3); font-size: 12px; }
+.place { border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; margin-top: 8px; }
+.place:first-of-type { margin-top: 0; }
+.place h4 { margin: 0 0 2px; font-size: 15.5px; overflow-wrap: anywhere; display: flex; align-items: baseline; gap: 8px; }
+.place h4 small { flex: none; font-size: 11px; font-weight: 700; color: var(--brand-ink); background: var(--brand); border-radius: 5px; padding: 1px 6px; }
+.acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.d-note { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14.5px; margin: 0; user-select: text; -webkit-user-select: text; }
+.d-edit { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.shift-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.shift-row button { flex: 1 1 60px; }
+
+.menu { list-style: none; margin: 0; padding: 0; }
+.menu > li > button, .menu > li > a, .menu > li > label {
+  display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 12px; align-items: center; width: 100%; text-align: left; border: 0; background: none;
+  padding: 11px 4px; min-height: 52px; border-radius: 10px; color: var(--ink); text-decoration: none; cursor: pointer; font-size: 15px;
+}
+.menu > li > button:hover, .menu > li > a:hover, .menu > li > label:hover { background: var(--field); }
+.menu b { display: block; font-weight: 700; }
+.menu small { display: block; color: var(--ink-3); font-size: 12.5px; }
+.menu > li > button > .ic, .menu > li > label > .ic { color: var(--ink-2); width: 22px; height: 22px; }
+.menu li + li { border-top: 1px solid var(--line); }
+.trip-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px; }
+.trip-row > span { display: flex; }
+.trip-row.cur > button:first-child b::after { content: "表示中"; font-size: 11px; margin-left: 8px; color: var(--brand); border: 1px solid var(--brand); border-radius: 5px; padding: 0 5px; font-weight: 700; }
+.copybox { width: 100%; min-height: 150px; font-size: 13px; font-family: var(--font); }
+.help p { margin: 0 0 10px; font-size: 14.5px; }
+.help h3 { font-size: 14px; margin: 16px 0 6px; }
+.help ul { margin: 0; padding-left: 1.2em; font-size: 14.5px; }
+.help li { margin-bottom: 4px; }
+
+.toasts { position: fixed; left: 0; right: 0; bottom: calc(78px + env(safe-area-inset-bottom, 0px)); z-index: 60; display: grid; justify-items: center; gap: 8px; pointer-events: none; padding: 0 16px; }
+.toast {
+  pointer-events: auto; display: flex; align-items: center; gap: 12px; max-width: 100%; background: var(--ink); color: var(--bg);
+  padding: 10px 10px 10px 16px; border-radius: 12px; font-size: 14px; box-shadow: var(--shadow); animation: up .18s ease-out;
+}
+.toast span { min-width: 0; overflow-wrap: anywhere; padding: 2px 6px 2px 0; }
+.toast button { flex: none; border: 0; background: none; color: inherit; font-weight: 700; text-decoration: underline; padding: 6px 8px; font-size: 14px; }
+
+/* ---------- 広い画面 ---------- */
+@media (min-width: 900px) {
+  .tabs-bottom { display: none; }
+  .tabs-top { display: flex; flex: none; gap: 4px; margin-right: 8px; }
+  .tabs-top .tab { grid-auto-flow: column; align-items: center; gap: 6px; min-height: 40px; padding: 4px 14px; font-size: 13.5px; border-radius: 10px; }
+  .tabs-top .tab .ic { width: 18px; height: 18px; }
+  .tabs-top .tab[aria-current="page"] { background: var(--brand-soft); }
+  .hdr-top { padding-left: 24px; padding-right: 16px; }
+  .chips { padding-left: 24px; }
+  .trip-btn { flex: 0 1 auto; margin-right: auto; }
+  .fab { bottom: 24px; right: 24px; }
+  .wrap { padding-bottom: 96px; }
+  .grid { --colw: 150px; }
+  .sheet { left: auto; top: 0; width: 440px; max-height: none; height: auto; border-radius: 0; border-left: 1px solid var(--line); animation: side .2s ease-out; }
+  .sheet.tall { height: auto; }
+  .toasts { bottom: 24px; }
+  .ev, .gap { grid-template-columns: 54px 30px minmax(0, 1fr); }
+}
+.wide-only { display: none; }
+@media (min-width: 480px) { .wide-only { display: inline; } }
+@media (prefers-reduced-motion: reduce) {
+  .sheet, .scrim, .toast, .ev.flash > .ev-card, .g-ev.flash { animation: none; }
+  .group > summary::after { transition: none; }
+}
+
+/* ---------- 印刷 ---------- */
+@media print {
+  html, body { height: auto; overflow: visible; background: #fff; }
+  .app { height: auto; display: block; }
+  .hdr { border: 0; }
+  .hdr-actions, .chips, .tabs, .fab, .scrim, .sheet, .toasts, .banner, .gap-add, .day-add, .list-foot, .trip-name .ic, .next { display: none !important; }
+  .main { overflow: visible; }
+  .wrap { max-width: none; padding-bottom: 0; }
+  .day-h { position: static; }
+  .day { break-inside: auto; }
+  .ev { break-inside: avoid; }
+  .ev-more { display: block; font-size: 12px; color: #333; margin-top: 4px; white-space: pre-wrap; }
+  .ev-sub { display: block; }
+  .ev-card { border-color: #bbb; }
+}
+</style>
+<div id="app"></div>
+<script type="application/json" id="tabi-data">{"trips":[{"id":"sample-kyoto","title":"京都 1泊2日（見本）","startDate":"2026-12-12","endDate":"2026-12-13","updatedAt":"2026-10-09T00:00:00.000Z","note":"これは見本の旅行です。自由にさわって、足したり、動かしたり、消したりしてみてください（右上の矢印で元に戻せます）。\n時刻・金額・お店は、すべて例です。\n自分の旅行は、画面上のタイトル →「新しい旅行をつくる」から。","dayTitles":{"2026-12-12":"東京 → 京都","2026-12-13":"嵐山へ、そして帰路"},"todos":[{"id":"s1","text":"新幹線のきっぷを予約する","done":false},{"id":"s2","text":"ホテルを予約する","done":true},{"id":"s3","text":"カイロと折りたたみ傘を持つ","done":false}],"events":[{"id":"s-d1-train","date":"2026-12-12","start":"08:30","end":"10:45","title":"新幹線　東京 → 京都","cat":"move","mode":"train","from":"東京","to":"京都","line":"のぞみ（見本）","reserve":"todo","cost":14000,"tentative":true,"note":"時刻と金額は見本です。予約のときに、列車名と時刻を入れなおしてください。"},{"id":"s-d1-kiyomizu","date":"2026-12-12","start":"11:15","end":"12:30","title":"清水寺をおまいり","cat":"spot","places":[{"name":"清水寺","address":"京都府京都市東山区清水1丁目294","hours":"6:00〜18:00ごろ（季節や行事で変わります）","url":"https://www.kiyomizudera.or.jp/"}],"note":"坂道が続きます。歩きやすい靴で。"},{"id":"s-d1-lunch","date":"2026-12-12","start":"12:45","end":"14:00","title":"昼食（お店は未定）","cat":"food","tentative":true,"note":"湯豆腐やおばんざいなど、京都らしいものを。"},{"id":"s-d1-gion","date":"2026-12-12","start":"14:30","end":"16:30","title":"祇園・花見小路をさんぽ","cat":"spot","places":[{"name":"花見小路通","address":"京都府京都市東山区祇園町南側"}]},{"id":"s-d1-hotel","date":"2026-12-12","start":"17:00","end":"18:00","title":"ホテルにチェックイン","cat":"stay","reserve":"done","reserveNo":"ABC-1234（見本）","cost":24000,"places":[{"name":"（ホテル名を入れる）","hours":"チェックイン 15:00〜／チェックアウト 〜10:00"}]},{"id":"s-d1-dinner","date":"2026-12-12","start":"18:30","end":"20:30","title":"夕食","cat":"food","tentative":true,"warn":"人気のお店は、前もって予約しておくと安心です。"},{"id":"s-d2-break","date":"2026-12-13","start":"08:00","end":"09:00","title":"ホテルで朝食","cat":"food"},{"id":"s-d2-arashi","date":"2026-12-13","start":"09:30","end":"12:00","title":"嵐山・竹林の小径","cat":"spot","places":[{"name":"竹林の小径","address":"京都府京都市右京区嵯峨（嵐山）"}],"note":"朝のうちは人が少なめです。"},{"id":"s-d2-lunch","date":"2026-12-13","start":"12:15","end":"13:30","title":"昼食","cat":"food","tentative":true},{"id":"s-d2-shop","date":"2026-12-13","start":"14:00","end":"15:30","title":"京都駅でおみやげ","cat":"other","places":[{"name":"京都駅","address":"京都府京都市下京区烏丸通塩小路下る東塩小路町"}]},{"id":"s-d2-train","date":"2026-12-13","start":"16:30","end":"18:50","title":"新幹線　京都 → 東京","cat":"move","mode":"train","from":"京都","to":"東京","line":"のぞみ（見本）","reserve":"todo","cost":14000,"tentative":true}]}]}</script>
+<script id="tabi-js">// たびしおり：画面に依存しない計算部分（日付・時刻・祝日・並べ替え・書き出し）。
+// ブラウザでは window.TabiCore、node では require() で使える（tests/core.test.cjs）。
+(function (root) {
+  'use strict';
+
+  var DOW = ['日', '月', '火', '水', '木', '金', '土'];
+  var CATS = {
+    move: { label: '移動' },
+    food: { label: '食事' },
+    stay: { label: '宿' },
+    spot: { label: '観光・体験' },
+    other: { label: 'その他' }
+  };
+  var CAT_ORDER = ['move', 'food', 'stay', 'spot', 'other'];
+  var MODES = { train: '電車・新幹線', bus: 'バス', car: '車', walk: '徒歩', plane: '飛行機' };
+  var MODE_ORDER = ['train', 'bus', 'car', 'walk', 'plane'];
+  var MAX_DAYS = 60;
+
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+  // ---- 時刻 ----
+  function toMin(t) {
+    if (!t) return null;
+    var m = /^(\d{1,2}):(\d{2})$/.exec(String(t).trim());
+    if (!m) return null;
+    var v = (+m[1]) * 60 + (+m[2]);
+    return v >= 0 && v <= 1440 ? v : null;
+  }
+  function fromMin(m) {
+    m = ((Math.round(m) % 1440) + 1440) % 1440;
+    return pad2(Math.floor(m / 60)) + ':' + pad2(m % 60);
+  }
+  function fmtDur(min) {
+    if (min == null || isNaN(min)) return '';
+    min = Math.round(min);
+    var h = Math.floor(min / 60), m = min % 60;
+    if (h && m) return h + '時間' + m + '分';
+    if (h) return h + '時間';
+    return m + '分';
+  }
+  // 終了が開始より前なら「日付をまたぐ」とみなす
+  function endMin(ev) {
+    var e = toMin(ev.end), s = toMin(ev.start);
+    if (e == null) return null;
+    if (s != null && e < s) e += 1440;
+    return e;
+  }
+  function duration(ev) {
+    var s = toMin(ev.start), e = endMin(ev);
+    return s == null || e == null ? null : e - s;
+  }
+
+  // ---- 日付 ----
+  function parseDate(iso) { var p = String(iso).split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]); }
+  function isoDate(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+  function isIso(s) { return /^\d{4}-\d{2}-\d{2}$/.test(String(s || '')) && isoDate(parseDate(s)) === s; }
+  function addDays(iso, n) { var d = parseDate(iso); d.setDate(d.getDate() + n); return isoDate(d); }
+  function diffDays(a, b) { return Math.round((parseDate(b) - parseDate(a)) / 86400000); }
+  function dow(iso) { return parseDate(iso).getDay(); }
+  function labelDate(iso) { var d = parseDate(iso); return (d.getMonth() + 1) + '月' + d.getDate() + '日(' + DOW[d.getDay()] + ')'; }
+  function shortDate(iso) { var d = parseDate(iso); return (d.getMonth() + 1) + '/' + d.getDate() + '(' + DOW[d.getDay()] + ')'; }
+
+  // ---- 日本の祝日（2020年以降の決まりで計算）----
+  var holidayCache = {};
+  function nthMonday(y, m, n) { var d = new Date(y, m - 1, 1); var off = (8 - d.getDay()) % 7; return 1 + off + (n - 1) * 7; }
+  function holidaysOf(y) {
+    if (holidayCache[y]) return holidayCache[y];
+    var h = {};
+    function put(m, d, name) { h[y + '-' + pad2(m) + '-' + pad2(d)] = name; }
+    put(1, 1, '元日');
+    put(1, nthMonday(y, 1, 2), '成人の日');
+    put(2, 11, '建国記念の日');
+    put(2, 23, '天皇誕生日');
+    put(3, Math.floor(20.8431 + 0.242194 * (y - 1980) - Math.floor((y - 1980) / 4)), '春分の日');
+    put(4, 29, '昭和の日');
+    put(5, 3, '憲法記念日');
+    put(5, 4, 'みどりの日');
+    put(5, 5, 'こどもの日');
+    put(7, nthMonday(y, 7, 3), '海の日');
+    put(8, 11, '山の日');
+    put(9, nthMonday(y, 9, 3), '敬老の日');
+    put(9, Math.floor(23.2488 + 0.242194 * (y - 1980) - Math.floor((y - 1980) / 4)), '秋分の日');
+    put(10, nthMonday(y, 10, 2), 'スポーツの日');
+    put(11, 3, '文化の日');
+    put(11, 23, '勤労感謝の日');
+    // 振替休日：祝日が日曜なら、その後の最初の「祝日でない日」
+    Object.keys(h).sort().forEach(function (iso) {
+      if (dow(iso) !== 0) return;
+      var n = addDays(iso, 1);
+      while (h[n]) n = addDays(n, 1);
+      h[n] = '振替休日';
+    });
+    // 国民の休日：祝日と祝日にはさまれた平日
+    Object.keys(h).sort().forEach(function (iso) {
+      var mid = addDays(iso, 1), next = addDays(iso, 2);
+      if (h[iso] === '振替休日' || h[iso] === '国民の休日') return;
+      if (!h[mid] && h[next] && h[next] !== '振替休日' && dow(mid) !== 0) h[mid] = '国民の休日';
+    });
+    holidayCache[y] = h;
+    return h;
+  }
+  function holidayName(iso) { return holidaysOf(+String(iso).slice(0, 4))[iso] || ''; }
+
+  // ---- 旅行・予定 ----
+  var idSeq = 0;
+  function newId(prefix) {
+    idSeq += 1;
+    return (prefix || 'e') + Date.now().toString(36) + idSeq.toString(36) + Math.floor(Math.random() * 1296).toString(36);
+  }
+  function tripDays(trip) {
+    var out = [];
+    if (!trip || !isIso(trip.startDate)) return out;
+    var end = isIso(trip.endDate) && trip.endDate >= trip.startDate ? trip.endDate : trip.startDate;
+    var n = Math.min(MAX_DAYS, diffDays(trip.startDate, end) + 1);
+    for (var i = 0; i < n; i++) out.push(addDays(trip.startDate, i));
+    return out;
+  }
+  function nightsLabel(trip) {
+    var n = tripDays(trip).length;
+    return n <= 1 ? '日帰り' : (n - 1) + '泊' + n + '日';
+  }
+  function normEvent(ev) {
+    var o = {
+      id: ev.id || newId('e'),
+      date: ev.date,
+      start: toMin(ev.start) != null ? fromMin(toMin(ev.start)) : '',
+      end: toMin(ev.end) != null ? fromMin(toMin(ev.end)) : '',
+      allDay: !!ev.allDay,
+      title: String(ev.title || '').trim() || '（名前なし）',
+      cat: CATS[ev.cat] ? ev.cat : 'other',
+      mode: MODES[ev.mode] ? ev.mode : '',
+      tentative: !!ev.tentative,
+      from: ev.from || '', to: ev.to || '', line: ev.line || '', seat: ev.seat || '',
+      places: (ev.places || []).map(function (p) {
+        return { name: p.name || '', address: p.address || '', tel: p.tel || '', hours: p.hours || '', url: p.url || '', note: p.note || '' };
+      }).filter(function (p) { return p.name || p.address || p.tel || p.hours || p.url || p.note; }),
+      reserve: ev.reserve === 'todo' || ev.reserve === 'done' ? ev.reserve : '',
+      reserveNo: ev.reserveNo || '',
+      cost: ev.cost === '' || ev.cost == null || isNaN(+ev.cost) ? '' : Math.max(0, Math.round(+ev.cost)),
+      note: ev.note || '',
+      warn: ev.warn || ''
+    };
+    if (o.allDay) { o.start = ''; o.end = ''; }
+    if (!o.start) o.end = '';
+    return o;
+  }
+  function normTrip(t) {
+    var start = isIso(t.startDate) ? t.startDate : isoDate(new Date());
+    var end = isIso(t.endDate) && t.endDate >= start ? t.endDate : start;
+    if (diffDays(start, end) + 1 > MAX_DAYS) end = addDays(start, MAX_DAYS - 1);
+    return {
+      id: t.id || newId('t'),
+      title: String(t.title || '').trim() || '新しい旅行',
+      startDate: start, endDate: end,
+      note: t.note || '',
+      dayTitles: Object.assign({}, t.dayTitles || {}),
+      events: (t.events || []).filter(function (e) { return e && isIso(e.date); }).map(normEvent),
+      todos: (t.todos || []).map(function (x) { return { id: x.id || newId('c'), text: String(x.text || ''), done: !!x.done }; }).filter(function (x) { return x.text; }),
+      updatedAt: t.updatedAt || new Date().toISOString()
+    };
+  }
+  // 終日 → 時刻あり（開始順）→ 時刻なし、の順
+  function sortEvents(list) {
+    return list.map(function (ev, i) { return { ev: ev, i: i }; }).sort(function (a, b) {
+      var ka = a.ev.allDay ? -1 : (toMin(a.ev.start) == null ? 99999 : toMin(a.ev.start));
+      var kb = b.ev.allDay ? -1 : (toMin(b.ev.start) == null ? 99999 : toMin(b.ev.start));
+      if (ka !== kb) return ka - kb;
+      var ea = endMin(a.ev), eb = endMin(b.ev);
+      if (ea != null && eb != null && ea !== eb) return ea - eb;
+      return a.i - b.i;
+    }).map(function (x) { return x.ev; });
+  }
+  function eventsOn(trip, date) {
+    return sortEvents(trip.events.filter(function (e) { return e.date === date; }));
+  }
+  // 並んだ2つの予定のあいだ：{gap: 分}（マイナスなら重なり）。計算できないときは null
+  function gapBetween(a, b) {
+    if (a.allDay || b.allDay) return null;
+    var e = endMin(a), s = toMin(b.start);
+    if (e == null || s == null) return null;
+    return s - e;
+  }
+  function shiftEvent(ev, delta) {
+    var s = toMin(ev.start);
+    if (s == null) return 0;
+    var ns = Math.max(0, Math.min(1435, s + delta));
+    var d = ns - s;
+    var e = endMin(ev);
+    ev.start = fromMin(ns);
+    if (e != null) ev.end = fromMin(e + d);
+    return d;
+  }
+  function totalCost(trip) {
+    return trip.events.reduce(function (sum, e) { return sum + (e.cost === '' ? 0 : +e.cost); }, 0);
+  }
+  function yen(n) { return '¥' + String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  function timeLabel(ev) {
+    if (ev.allDay) return '終日';
+    if (!ev.start) return '時刻未定';
+    return ev.start + (ev.end ? '–' + ev.end : '') + (ev.tentative ? ' ごろ' : '');
+  }
+  function subLine(ev) {
+    var parts = [];
+    if (ev.from || ev.to) parts.push((ev.from || '？') + ' → ' + (ev.to || '？'));
+    if (ev.line) parts.push(ev.line);
+    if (ev.places.length) parts.push(ev.places.map(function (p) { return p.name; }).filter(Boolean).join(' ／ '));
+    return parts.filter(Boolean).join('・');
+  }
+
+  // ---- 取り込み：埋め込まれた旅行（見本・共有された版）を、手元の版と新しいほう優先で合わせる ----
+  function mergeEmbedded(data, embedded) {
+    var changed = false;
+    if (!embedded || !Array.isArray(embedded.trips)) return changed;
+    embedded.trips.forEach(function (raw) {
+      var t = normTrip(raw);
+      var removedAt = data.removed && data.removed[t.id];
+      if (removedAt && removedAt >= t.updatedAt) return;
+      var i = data.trips.findIndex(function (x) { return x.id === t.id; });
+      if (i < 0) { data.trips.push(t); changed = true; }
+      else if (data.trips[i].updatedAt < t.updatedAt) { data.trips[i] = t; changed = true; }
+    });
+    return changed;
+  }
+
+  // ---- 書き出し：文章 ----
+  function tripToText(trip) {
+    var days = tripDays(trip), L = [];
+    L.push('【' + trip.title + '】' + shortDate(trip.startDate) + (days.length > 1 ? '〜' + shortDate(trip.endDate) : '') + '（' + nightsLabel(trip) + '）');
+    days.forEach(function (date, i) {
+      var hol = holidayName(date);
+      L.push('');
+      L.push('■' + (i + 1) + '日目 ' + shortDate(date) + (hol ? ' ' + hol : '') + (trip.dayTitles[date] ? '　' + trip.dayTitles[date] : ''));
+      var list = eventsOn(trip, date);
+      if (!list.length) L.push('（予定なし）');
+      list.forEach(function (ev) {
+        var t = ev.allDay ? '終日' : (ev.start ? ev.start + (ev.end ? '-' + ev.end : '') : '--:--');
+        var line = t + ' ' + ev.title + (ev.tentative ? '（仮）' : '');
+        if (ev.line) line += '／' + ev.line;
+        L.push(line);
+        ev.places.forEach(function (p) {
+          var s = [p.name, p.address, p.tel].filter(Boolean).join(' ');
+          if (s && (p.address || p.tel)) L.push('　・' + s);
+        });
+        if (ev.reserveNo) L.push('　予約番号：' + ev.reserveNo);
+        if (ev.warn) L.push('　※' + ev.warn.replace(/\n+/g, ' '));
+      });
+    });
+    if (trip.note) { L.push(''); L.push('メモ：' + trip.note); }
+    return L.join('\n');
+  }
+
+  // ---- 書き出し：カレンダー（.ics）----
+  function icsEsc(s) { return String(s || '').replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n').replace(/([,;])/g, '\\$1'); }
+  function icsFold(line) {
+    var out = [], cur = '', bytes = 0;
+    Array.from(line).forEach(function (ch) {
+      var b = ch.charCodeAt(0) < 128 ? 1 : (ch.length > 1 ? 4 : 3);
+      if (bytes + b > 72) { out.push(cur); cur = ' '; bytes = 1; }
+      cur += ch; bytes += b;
+    });
+    out.push(cur);
+    return out.join('\r\n');
+  }
+  function tripToICS(trip, stamp) {
+    stamp = stamp || new Date();
+    var ds = stamp.getUTCFullYear() + pad2(stamp.getUTCMonth() + 1) + pad2(stamp.getUTCDate()) + 'T' + pad2(stamp.getUTCHours()) + pad2(stamp.getUTCMinutes()) + pad2(stamp.getUTCSeconds()) + 'Z';
+    var L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//tabi-shiori//JP', 'CALSCALE:GREGORIAN', 'X-WR-CALNAME:' + icsEsc(trip.title)];
+    function d8(iso) { return iso.replace(/-/g, ''); }
+    function t6(t) { return t.replace(':', '') + '00'; }
+    trip.events.forEach(function (ev) {
+      L.push('BEGIN:VEVENT');
+      L.push('UID:' + ev.id + '@tabi-shiori');
+      L.push('DTSTAMP:' + ds);
+      if (ev.allDay || !ev.start) {
+        L.push('DTSTART;VALUE=DATE:' + d8(ev.date));
+        L.push('DTEND;VALUE=DATE:' + d8(addDays(ev.date, 1)));
+      } else {
+        var s = toMin(ev.start), e = endMin(ev);
+        if (e == null) e = s + 30;
+        L.push('DTSTART;TZID=Asia/Tokyo:' + d8(ev.date) + 'T' + t6(ev.start));
+        L.push('DTEND;TZID=Asia/Tokyo:' + d8(addDays(ev.date, e >= 1440 ? 1 : 0)) + 'T' + t6(fromMin(e)));
+      }
+      L.push('SUMMARY:' + icsEsc(ev.title + (ev.tentative ? '（仮）' : '')));
+      var loc = ev.places[0] ? [ev.places[0].name, ev.places[0].address].filter(Boolean).join(' ') : (ev.from || ev.to ? (ev.from + ' → ' + ev.to) : '');
+      if (loc) L.push('LOCATION:' + icsEsc(loc));
+      var desc = [];
+      if (ev.line) desc.push(ev.line);
+      if (ev.seat) desc.push('座席：' + ev.seat);
+      ev.places.forEach(function (p) { desc.push([p.name, p.address, p.tel, p.hours, p.url].filter(Boolean).join(' / ')); });
+      if (ev.reserveNo) desc.push('予約番号：' + ev.reserveNo);
+      if (ev.warn) desc.push('注意：' + ev.warn);
+      if (ev.note) desc.push(ev.note);
+      if (desc.length) L.push('DESCRIPTION:' + icsEsc(desc.join('\n')));
+      L.push('END:VEVENT');
+    });
+    L.push('END:VCALENDAR');
+    return L.map(icsFold).join('\r\n') + '\r\n';
+  }
+
+  // ---- 時間割で、重なる予定を横に並べる ----
+  // 返り値：[{ev, s, e, col, cols}]（s/e は分。e は最低でも s+minLen）
+  function layoutDay(list, minLen) {
+    var items = list.filter(function (ev) { return !ev.allDay && toMin(ev.start) != null; }).map(function (ev) {
+      var s = toMin(ev.start), e = endMin(ev);
+      if (e == null) e = s + 30;
+      e = Math.min(1440, e);
+      return { ev: ev, s: s, e: e, ve: Math.max(e, s + (minLen || 0)), col: 0, cols: 1 };
+    }).sort(function (a, b) { return a.s - b.s || b.ve - a.ve; });
+    var group = [], groupEnd = -1;
+    function flush() {
+      var n = group.reduce(function (m, it) { return Math.max(m, it.col + 1); }, 1);
+      group.forEach(function (it) { it.cols = n; });
+      group = [];
+    }
+    items.forEach(function (it) {
+      if (group.length && it.s >= groupEnd) flush();
+      var used = {};
+      group.forEach(function (g) { if (g.ve > it.s) used[g.col] = true; });
+      var c = 0; while (used[c]) c++;
+      it.col = c;
+      group.push(it);
+      groupEnd = Math.max(groupEnd, it.ve);
+      if (group.length === 1) groupEnd = it.ve;
+    });
+    if (group.length) flush();
+    return items;
+  }
+
+  var Core = {
+    DOW: DOW, CATS: CATS, CAT_ORDER: CAT_ORDER, MODES: MODES, MODE_ORDER: MODE_ORDER, MAX_DAYS: MAX_DAYS,
+    pad2: pad2, toMin: toMin, fromMin: fromMin, fmtDur: fmtDur, endMin: endMin, duration: duration,
+    parseDate: parseDate, isoDate: isoDate, isIso: isIso, addDays: addDays, diffDays: diffDays, dow: dow,
+    labelDate: labelDate, shortDate: shortDate, holidayName: holidayName,
+    newId: newId, tripDays: tripDays, nightsLabel: nightsLabel, normEvent: normEvent, normTrip: normTrip,
+    sortEvents: sortEvents, eventsOn: eventsOn, gapBetween: gapBetween, shiftEvent: shiftEvent,
+    totalCost: totalCost, yen: yen, timeLabel: timeLabel, subLine: subLine,
+    mergeEmbedded: mergeEmbedded, tripToText: tripToText, tripToICS: tripToICS, layoutDay: layoutDay
+  };
+  if (typeof module !== 'undefined' && module.exports) module.exports = Core;
+  else root.TabiCore = Core;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+// たびしおり：画面。データは TabiCore（js/core.js）で計算し、ここでは描画と操作だけを扱う。
+// 保存先は2通り：ふつうに開いたときはこのブラウザ（localStorage）。Claude のアーティファクトとして開いたときは、ページ自身を新しい版として保存する。
+(function () {
+  'use strict';
+  var C = window.TabiCore;
+  var doc = document;
+  var LS_KEY = 'tabi-shiori:v1';
+  var SS_KEY = 'tabi-shiori:ui';
+  var APP_TITLE = 'たびしおり';
+  var isArtifact = !!(window.claude && typeof window.claude.use === 'function');
+  var qs = new URLSearchParams(location.search);
+  var NOW_OVERRIDE = !isArtifact && qs.get('now') ? new Date(qs.get('now')) : null;
+  if (NOW_OVERRIDE && isNaN(NOW_OVERRIDE)) NOW_OVERRIDE = null;
+  var bootAt = Date.now();
+  function now() { return NOW_OVERRIDE ? new Date(NOW_OVERRIDE.getTime() + (Date.now() - bootAt)) : new Date(); }
+
+  // ---------- 小さな道具 ----------
+  function $(sel, el) { return (el || doc).querySelector(sel); }
+  function $$(sel, el) { return Array.prototype.slice.call((el || doc).querySelectorAll(sel)); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function safeUrl(u) {
+    u = String(u || '').trim();
+    if (/^https?:\/\//i.test(u)) return u;
+    if (/^[\w-]+(\.[\w-]+)+(\/|$)/.test(u)) return 'https://' + u;
+    return '';
+  }
+  function linkify(text) {
+    return esc(text).replace(/https?:\/\/[^\s<>"'）)」]+/g, function (u) { return '<a href="' + u + '" target="_blank" rel="noopener">' + u + '</a>'; });
+  }
+  var ICONS = {
+    train: 'M7 3h10a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3z M4 11h16 M8.5 14.5h.01 M15.5 14.5h.01 M8 18l-2 3 M16 18l2 3',
+    bus: 'M6 4h12a2 2 0 0 1 2 2v11H4V6a2 2 0 0 1 2-2z M4 11h16 M7.5 14.3h.01 M16.5 14.3h.01 M7 17v2.5 M17 17v2.5',
+    car: 'M5 11l1.6-4.6A2 2 0 0 1 8.5 5h7a2 2 0 0 1 1.9 1.4L19 11 M3 11h18v6H3z M7 14h.01 M17 14h.01 M6 17v2 M18 17v2',
+    walk: 'M13.5 5.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z M10 21l2-6-2.5-2.5 1-5 3.5 1.5 1.5 3 3 1 M8 11.5l2.5-4 M13.5 15.5L16 21',
+    plane: 'M3 13l18-8-6 16-3.5-6.5z M11.5 14.5L21 5',
+    food: 'M6 3v6a2 2 0 0 0 4 0V3 M8 11v10 M17 3c-2 0-3 2.6-3 5.5S15 13 17 13z M17 13v8',
+    stay: 'M3 19V6 M3 15h18v4 M21 15v-2a3 3 0 0 0-3-3h-7v5 M7 12a1.6 1.6 0 1 0 0-3.2A1.6 1.6 0 0 0 7 12z',
+    spot: 'M3 20l6-10 4 6 2-3 6 7z M16.5 7a1.7 1.7 0 1 0 0-3.4 1.7 1.7 0 0 0 0 3.4z',
+    other: 'M6 4h12v16l-6-4-6 4z',
+    pin: 'M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11z M12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',
+    phone: 'M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z',
+    clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M12 7.5V12l3 2',
+    link: 'M10 14a4 4 0 0 0 5.7 0l3-3A4 4 0 0 0 13 5.3l-1 1 M14 10a4 4 0 0 0-5.7 0l-3 3A4 4 0 0 0 11 18.7l1-1',
+    ticket: 'M3 9V6h18v3a3 3 0 0 0 0 6v3H3v-3a3 3 0 0 0 0-6z M14 6v2.5 M14 11v2 M14 15.5V18',
+    yen: 'M6 4l6 8 6-8 M12 12v8 M7.5 13h9 M7.5 17h9',
+    note: 'M6 4h12v16H6z M9 9h6 M9 13h6 M9 17h3',
+    warn: 'M12 4l9 16H3z M12 10v4.5 M12 17.4h.01',
+    plus: 'M12 5v14 M5 12h14',
+    edit: 'M4 20h4L19 9l-4-4L4 16z M13.5 6.5l4 4',
+    trash: 'M4 7h16 M9 7V4h6v3 M6 7l1 13h10l1-13 M10 11v6 M14 11v6',
+    copy: 'M9 9h11v11H9z M5 15H4V4h11v1',
+    undo: 'M9 14L4 9l5-5 M4 9h10a6 6 0 0 1 0 12h-3',
+    redo: 'M15 14l5-5-5-5 M20 9H10a6 6 0 0 0 0 12h3',
+    eye: 'M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+    more: 'M5 12h.01 M12 12h.01 M19 12h.01',
+    down: 'M6 9l6 6 6-6',
+    left: 'M15 6l-6 6 6 6',
+    right: 'M9 6l6 6-6 6',
+    x: 'M6 6l12 12 M18 6L6 18',
+    check: 'M5 12.5l4.5 4.5L19 7.5',
+    list: 'M9 6h11 M9 12h11 M9 18h11 M4.5 6h.01 M4.5 12h.01 M4.5 18h.01',
+    grid: 'M4 5h16v15H4z M4 9.5h16 M9.3 9.5V20 M14.7 9.5V20',
+    sum: 'M8 5H6v16h12V5h-2 M9 3h6v4H9z M9 13.5l2 2 4-4',
+    share: 'M12 15V4 M8 8l4-4 4 4 M5 12v8h14v-8',
+    save: 'M12 4v11 M8 11l4 4 4-4 M5 20h14',
+    open: 'M12 15V4 M8 8l4-4 4 4 M5 20h14',
+    print: 'M7 8V4h10v4 M7 17H4V9h16v8h-3 M7 14h10v6H7z',
+    cal: 'M4 6h16v14H4z M4 10h16 M8 3v5 M16 3v5',
+    shift: 'M8 4v16 M5 7l3-3 3 3 M16 20V4 M13 17l3 3 3-3',
+    map: 'M9 4L3 6v14l6-2 6 2 6-2V4l-6 2z M9 4v14 M15 6v14',
+    route: 'M6 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4z M18 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4z M6 16v-4a4 4 0 0 1 4-4h6',
+    bag: 'M5 8h14l-1 12H6z M9 8V6a3 3 0 0 1 6 0v2',
+    help: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1 1-1.1 1.8 M12 16.8h.01',
+    gear: 'M4 7h9 M17 7h3 M4 17h3 M11 17h9 M15 9.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z M9 19.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',
+    text: 'M5 6h14 M5 10h14 M5 14h9 M5 18h6',
+    html: 'M8 8l-4 4 4 4 M16 8l4 4-4 4 M13.5 5l-3 14',
+    zin: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14z M21 21l-5-5 M11 8v6 M8 11h6',
+    zout: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14z M21 21l-5-5 M8 11h6'
+  };
+  function ic(name) { return '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="' + (ICONS[name] || ICONS.other) + '"/></svg>'; }
+  function evIcon(ev) { return ev.cat === 'move' ? (ev.mode || 'train') : ev.cat; }
+  function catLabel(ev) { return C.CATS[ev.cat].label + (ev.cat === 'move' && ev.mode ? '・' + C.MODES[ev.mode] : ''); }
+
+  // ---------- 状態 ----------
+  var D = { trips: [], cur: '', removed: {}, prefs: { edit: !isArtifact, zoom: 1 } };
+  var UI = { tab: 'list', sheets: [], undo: [], redo: [], flash: '', suppressClick: false };
+  var Host = { artifact: isArtifact, canEdit: !isArtifact, api: null, downloads: null, publishedJson: '', baseHash: '', stale: false, busy: false };
+  var G = { lo: 7, hi: 21, H: 56 };
+  var app, mainEl, sheetEl, scrimEl, toastsEl;
+
+  function trip() { for (var i = 0; i < D.trips.length; i++) if (D.trips[i].id === D.cur) return D.trips[i]; return null; }
+  function findEv(id) { var t = trip(); if (!t) return null; for (var i = 0; i < t.events.length; i++) if (t.events[i].id === id) return t.events[i]; return null; }
+  function canEdit() { return Host.canEdit && !!D.prefs.edit; }
+  function hash(s) { var h = 5381; for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
+  function isDirty() { return Host.artifact && JSON.stringify(D.trips) !== Host.publishedJson; }
+
+  function readEmbedded() {
+    var el = doc.getElementById('tabi-data');
+    if (el) { try { var o = JSON.parse(el.textContent); if (o && Array.isArray(o.trips)) return o; } catch (e) { /* 壊れていたら見本にフォールバック */ } }
+    return window.TABI_SEED || null;
+  }
+  function pickDefaultTrip() {
+    var today = C.isoDate(now()), best = null;
+    D.trips.forEach(function (t) {
+      if (t.endDate < today) return;
+      if (!best || t.startDate < best.startDate) best = t;
+    });
+    return (best || D.trips[0] || { id: '' }).id;
+  }
+  function load() {
+    var saved = null;
+    try { saved = JSON.parse(localStorage.getItem(LS_KEY) || 'null'); } catch (e) { saved = null; }
+    var emb = readEmbedded();
+    if (saved && saved.prefs) { if (typeof saved.prefs.edit === 'boolean') D.prefs.edit = saved.prefs.edit; if (saved.prefs.zoom) D.prefs.zoom = saved.prefs.zoom; }
+    if (Host.artifact) {
+      // アーティファクトでは「公開されている版」が正。自分だけの未保存の変更は draft として持つ
+      var pub = emb ? emb.trips.map(C.normTrip) : [];
+      Host.publishedJson = JSON.stringify(pub);
+      Host.baseHash = hash(Host.publishedJson);
+      D.trips = JSON.parse(Host.publishedJson);
+      Host.draft = saved && Array.isArray(saved.draft) ? saved : null;
+    } else {
+      if (saved && Array.isArray(saved.trips)) { D.trips = saved.trips.map(C.normTrip); D.removed = saved.removed || {}; }
+      if (emb) C.mergeEmbedded(D, emb);
+    }
+    D.cur = saved && saved.cur;
+    if (!trip()) D.cur = pickDefaultTrip();
+    try { var ui = JSON.parse(sessionStorage.getItem(SS_KEY) || 'null'); if (ui) { if (ui.tab) UI.tab = ui.tab; if (ui.cur) { var keep = D.cur; D.cur = ui.cur; if (!trip()) D.cur = keep; } UI.restoreTop = ui.top || 0; } } catch (e) { /* なくてよい */ }
+  }
+  function applyDraft() {
+    var d = Host.draft;
+    Host.draft = null;
+    if (!d) return;
+    var trips = d.draft.map(C.normTrip);
+    if (JSON.stringify(trips) === Host.publishedJson) return;
+    D.trips = trips;
+    Host.stale = d.base !== Host.baseHash;
+    if (d.cur) { var keep = D.cur; D.cur = d.cur; if (!trip()) D.cur = keep; }
+    if (!trip()) D.cur = pickDefaultTrip();
+  }
+  function persist() {
+    var o = { prefs: D.prefs, cur: D.cur };
+    if (Host.artifact) { if (Host.canEdit && isDirty()) { o.draft = D.trips; o.base = Host.stale ? '' : Host.baseHash; } }
+    else { o.trips = D.trips; o.removed = D.removed; }
+    try { localStorage.setItem(LS_KEY, JSON.stringify(o)); } catch (e) { /* 保存できない環境でも表示は続ける */ }
+  }
+  function stashUI() {
+    try { sessionStorage.setItem(SS_KEY, JSON.stringify({ tab: UI.tab, cur: D.cur, top: mainEl ? mainEl.scrollTop : 0 })); } catch (e) { /* なくてよい */ }
+  }
+
+  // ---------- 変更・元に戻す ----------
+  function snapshot() { return JSON.stringify({ trips: D.trips, cur: D.cur, removed: D.removed }); }
+  function restore(s) { var o = JSON.parse(s); D.trips = o.trips; D.cur = o.cur; D.removed = o.removed || {}; }
+  function commit(msg, fn) {
+    var before = snapshot();
+    if (fn() === false) return false;
+    var t = trip();
+    if (t) { var stamp = new Date().toISOString(); t.updatedAt = stamp > t.updatedAt ? stamp : new Date(Date.parse(t.updatedAt) + 1).toISOString(); }
+    UI.undo.push(before);
+    if (UI.undo.length > 60) UI.undo.shift();
+    UI.redo = [];
+    persist();
+    render();
+    if (msg) toast(msg, '元に戻す', undo);
+    return true;
+  }
+  function undo() {
+    if (!UI.undo.length) return;
+    UI.redo.push(snapshot());
+    restore(UI.undo.pop());
+    afterHistory('元に戻しました');
+  }
+  function redo() {
+    if (!UI.redo.length) return;
+    UI.undo.push(snapshot());
+    restore(UI.redo.pop());
+    afterHistory('やり直しました');
+  }
+  function afterHistory(msg) {
+    if (!trip()) D.cur = pickDefaultTrip();
+    UI.sheets = [];
+    persist();
+    render();
+    toast(msg);
+  }
+
+  // ---------- 旅行の状態 ----------
+  function phase(t) {
+    var today = C.isoDate(now());
+    if (today < t.startDate) return { k: 'before', days: C.diffDays(today, t.startDate) };
+    if (today > t.endDate) return { k: 'after' };
+    return { k: 'during', day: C.diffDays(t.startDate, today) + 1 };
+  }
+  function rangeLabel(t) {
+    if (t.endDate === t.startDate) return C.shortDate(t.startDate);
+    var a = C.parseDate(t.startDate), b = C.parseDate(t.endDate);
+    // 同じ月なら、帰る日は「日(曜)」だけにして短くする
+    return C.shortDate(t.startDate) + '〜' + (a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear() ? b.getDate() + '(' + C.DOW[b.getDay()] + ')' : C.shortDate(t.endDate));
+  }
+  function dayClass(date) {
+    var w = C.dow(date);
+    return (C.holidayName(date) ? ' hol' : '') + (w === 0 ? ' sun' : '') + (w === 6 ? ' sat' : '');
+  }
+  function orderedEvents(t) {
+    var days = {};
+    t.events.forEach(function (e) { days[e.date] = true; });
+    var out = [];
+    Object.keys(days).sort().forEach(function (d) { out = out.concat(C.eventsOn(t, d)); });
+    return out;
+  }
+
+  // ---------- 枠 ----------
+  function buildShell() {
+    doc.documentElement.lang = 'ja';
+    app = doc.getElementById('app');
+    app.className = 'app';
+    app.innerHTML =
+      '<header class="hdr"><div class="hdr-top">' +
+        '<button type="button" class="trip-btn" data-act="trips" id="trip-btn"></button>' +
+        '<nav class="tabs tabs-top" aria-label="表示の切り替え"></nav>' +
+        '<div class="hdr-actions" id="hdr-actions"></div>' +
+      '</div><div class="chips" id="chips"></div></header>' +
+      '<div class="banner" id="banner" hidden></div>' +
+      '<main class="main" id="main" tabindex="-1"></main>' +
+      '<button type="button" class="fab" id="fab" data-act="add">' + ic('plus') + '予定</button>' +
+      '<nav class="tabs tabs-bottom" aria-label="表示の切り替え"></nav>' +
+      '<div class="scrim" id="scrim" hidden></div>' +
+      '<aside class="sheet" id="sheet" role="dialog" aria-modal="true" tabindex="-1" hidden></aside>' +
+      '<div class="toasts" id="toasts" aria-live="polite"></div>';
+    mainEl = $('#main'); sheetEl = $('#sheet'); scrimEl = $('#scrim'); toastsEl = $('#toasts');
+  }
+
+  function render() {
+    renderHeader();
+    renderBanner();
+    renderMain();
+    var top = UI.sheets[UI.sheets.length - 1];
+    if (top && !INPUT_SHEETS[top.type]) drawSheet(false);
+  }
+
+  function renderHeader() {
+    var t = trip();
+    app.dataset.tab = UI.tab;
+    app.dataset.edit = canEdit() ? '1' : '0';
+    var meta = '';
+    if (t) {
+      var ph = phase(t);
+      meta = (ph.k === 'during' ? '旅行中（' + ph.day + '日目）・' : '') + esc(rangeLabel(t)) + '<span class="wide-only">・' + C.nightsLabel(t) + '</span>' + (ph.k === 'before' ? '・あと' + ph.days + '日' : '');
+    }
+    $('#trip-btn').innerHTML = '<span class="trip-name"><span>' + esc(t ? t.title : APP_TITLE) + '</span>' + ic('down') + '</span>' +
+      '<span class="trip-meta">' + (t ? meta : '旅行をえらぶ・つくる') + '</span>';
+    $('#trip-btn').setAttribute('aria-label', (t ? t.title : APP_TITLE) + '（旅行の一覧をひらく）');
+
+    var a = '';
+    if (canEdit()) {
+      a += '<button type="button" class="icon-btn" data-act="undo" aria-label="元に戻す" title="元に戻す"' + (UI.undo.length ? '' : ' disabled') + '>' + ic('undo') + '</button>';
+      a += '<button type="button" class="icon-btn" id="redo-btn" data-act="redo" aria-label="やり直す" title="やり直す"' + (UI.redo.length ? '' : ' hidden') + '>' + ic('redo') + '</button>';
+    }
+    if (Host.canEdit && t) {
+      a += '<button type="button" class="mode" data-act="mode" aria-pressed="' + (D.prefs.edit ? 'true' : 'false') + '" title="' + (D.prefs.edit ? '編集できます。押すと「見るだけ」に切り替え' : '見るだけの表示です。押すと編集できます') + '">' +
+        ic(D.prefs.edit ? 'edit' : 'eye') + '<b>' + (D.prefs.edit ? '編集中' : '見るだけ') + '</b></button>';
+    }
+    a += '<button type="button" class="icon-btn" data-act="menu" aria-label="メニュー" title="メニュー">' + ic('more') + '</button>';
+    $('#hdr-actions').innerHTML = a;
+
+    var tabs = [['list', '日程'], ['grid', '時間割'], ['sum', 'まとめ']].map(function (x) {
+      return '<button type="button" class="tab" data-act="tab" data-tab="' + x[0] + '"' + (UI.tab === x[0] ? ' aria-current="page"' : '') + '>' + ic(x[0]) + '<span>' + x[1] + '</span></button>';
+    }).join('');
+    $$('.tabs').forEach(function (n) { n.innerHTML = tabs; n.hidden = !t; });
+
+    var chips = '';
+    if (t && UI.tab !== 'sum') {
+      C.tripDays(t).forEach(function (date, i) {
+        var d = C.parseDate(date);
+        chips += '<button type="button" class="chip' + dayClass(date) + '" data-act="jump" data-date="' + date + '"><b>' + (i + 1) + '日目</b><i class="num">' + (d.getMonth() + 1) + '/' + d.getDate() + ' ' + C.DOW[d.getDay()] + '</i></button>';
+      });
+    }
+    var chipsEl = $('#chips');
+    chipsEl.innerHTML = chips;
+    chipsEl.hidden = !chips;
+    $('#fab').hidden = !(canEdit() && t && UI.tab !== 'sum');
+    doc.title = t ? t.title + '｜' + APP_TITLE : APP_TITLE;
+  }
+
+  function renderBanner() {
+    var b = $('#banner'), html = '';
+    if (Host.artifact && Host.canEdit && isDirty()) {
+      html = '<p>' + (Host.stale ? 'ほかの端末で新しい版が保存されています。この端末には、まだ保存していない変更があります。' : 'この端末だけの変更があります。保存すると、見ている人みんなに反映されます。') + '</p>' +
+        '<button type="button" class="btn small primary" data-act="publish"' + (Host.busy ? ' disabled' : '') + '>' + (Host.busy ? '保存中…' : (Host.stale ? 'この内容で上書き保存' : 'みんなに反映する')) + '</button>' +
+        '<button type="button" class="btn small" data-act="discard"' + (Host.busy ? ' disabled' : '') + '>変更を捨てる</button>';
+    }
+    b.innerHTML = html;
+    b.hidden = !html;
+  }
+
+  function renderMain() {
+    var t = trip(), keepTop = mainEl.scrollTop, keepLeft = mainEl.scrollLeft, same = mainEl.dataset.tab === UI.tab && mainEl.dataset.trip === (t ? t.id : '');
+    mainEl.dataset.tab = UI.tab;
+    mainEl.dataset.trip = t ? t.id : '';
+    if (!t) {
+      mainEl.innerHTML = '<div class="wrap"><div class="sum"><div><h2>旅行がまだありません</h2><p class="muted">旅行をつくると、日ごとの予定を並べて、予約や持ち物もまとめて見られます。</p>' +
+        (Host.canEdit ? '<div class="list-foot"><button type="button" class="btn primary" data-act="trip-new">' + ic('plus') + '新しい旅行をつくる</button></div>' : '') + '</div></div></div>';
+      return;
+    }
+    mainEl.innerHTML = UI.tab === 'grid' ? gridHTML(t) : UI.tab === 'sum' ? sumHTML(t) : listHTML(t);
+    if (same) { mainEl.scrollTop = keepTop; mainEl.scrollLeft = keepLeft; }
+    else if (UI.restoreTop) { mainEl.scrollTop = UI.restoreTop; UI.restoreTop = 0; }
+    else initialScroll(t);
+    if (UI.flash) {
+      var el = $('[data-id="' + UI.flash + '"]', mainEl);
+      UI.flash = '';
+      if (el) { el.scrollIntoView({ block: 'center', inline: 'center' }); el.classList.add('flash'); }
+    }
+    spy();
+  }
+
+  function initialScroll(t) {
+    var today = C.isoDate(now());
+    if (UI.tab === 'list') {
+      var sec = $('.day[data-date="' + today + '"]', mainEl);
+      mainEl.scrollTop = sec ? sec.offsetTop : 0;
+      var cur = sec && ($('.ev.is-now', sec) || $('.ev:not(.is-past)', sec));
+      if (cur) mainEl.scrollTop = Math.max(sec.offsetTop, cur.offsetTop - 120);
+    } else if (UI.tab === 'grid') {
+      var first = null;
+      t.events.forEach(function (e) { var s = C.toMin(e.start); if (s != null && (first == null || s < first)) first = s; });
+      mainEl.scrollTop = first == null ? 0 : Math.max(0, (first - G.lo * 60) * G.H / 60 - 12);
+      var col = $('.g-col[data-date="' + today + '"]', mainEl);
+      mainEl.scrollLeft = col ? col.offsetLeft - 44 : 0;
+    } else mainEl.scrollTop = 0;
+  }
+
+  // ---------- 日程（リスト）----------
+  function subText(ev) {
+    var p = [];
+    if (ev.cat === 'move') {
+      if (ev.line) p.push(ev.line);
+      else if ((ev.from || ev.to) && !(ev.title.indexOf(ev.from) >= 0 && ev.title.indexOf(ev.to) >= 0)) p.push((ev.from || '？') + ' → ' + (ev.to || '？'));
+      var d = C.duration(ev);
+      if (d) p.push(C.fmtDur(d));
+    } else if (ev.places.length === 1) {
+      var pl = ev.places[0];
+      var bare = pl.name.replace(/[（(].*$/, '').trim();
+      if (pl.name && ev.title.indexOf(bare) < 0) p.push(pl.name);
+      else if (pl.hours) p.push(pl.hours);
+      else if (pl.address) p.push(pl.address.replace(/^〒\s*[\d-]+\s*/, ''));
+    } else if (ev.places.length > 1) {
+      p.push('候補 ' + ev.places.length + 'か所：' + ev.places.map(function (x) { return x.name.replace(/[（(].*$/, '').trim(); }).filter(Boolean).join(' ／ '));
+    }
+    return p.join('・');
+  }
+  function tagsHTML(ev, isNow) {
+    var h = '';
+    if (isNow) h += '<span class="tag now">いま</span>';
+    if (ev.warn) h += '<span class="tag warn">' + ic('warn') + '要確認</span>';
+    if (ev.tentative) h += '<span class="tag">仮</span>';
+    if (ev.reserve === 'todo') h += '<span class="tag">' + ic('ticket') + '未予約</span>';
+    if (ev.reserve === 'done') h += '<span class="tag done">' + ic('check') + '予約済み</span>';
+    if (ev.cost !== '') h += '<span class="tag num">' + C.yen(ev.cost) + '</span>';
+    return h;
+  }
+  function printText(ev) {
+    var L = [];
+    if ((ev.from || ev.to) && !(ev.title.indexOf(ev.from) >= 0 && ev.title.indexOf(ev.to) >= 0)) L.push((ev.from || '？') + ' → ' + (ev.to || '？'));
+    if (ev.seat) L.push('座席・のりば：' + ev.seat);
+    ev.places.forEach(function (p) { L.push([p.name, p.address, p.tel, p.hours].filter(Boolean).join('　')); });
+    if (ev.reserveNo) L.push('予約番号：' + ev.reserveNo);
+    if (ev.warn) L.push('※ ' + ev.warn);
+    if (ev.note) L.push(ev.note);
+    return L.join('\n');
+  }
+  function evHTML(ev, nowMin, pastDay) {
+    var s = C.toMin(ev.start), e = C.endMin(ev), state = '';
+    if (pastDay) state = ' is-past';
+    else if (nowMin != null && s != null) {
+      if ((e != null ? e : s + 30) <= nowMin) state = ' is-past';
+      else if (s <= nowMin) state = ' is-now';
+    }
+    var time = ev.allDay ? '<span class="none">終日</span>'
+      : ev.start ? '<b class="num">' + ev.start + '</b>' + (ev.end ? '<span class="num">' + ev.end + '</span>' : '')
+        : '<span class="none">時刻<br>未定</span>';
+    var sub = subText(ev);
+    return '<li class="ev cat-' + ev.cat + state + '" data-id="' + ev.id + '">' +
+      '<div class="ev-time">' + time + '</div>' +
+      '<div class="rail"><span class="dot">' + ic(evIcon(ev)) + '</span></div>' +
+      '<button type="button" class="ev-card" data-act="open" data-id="' + ev.id + '">' +
+        '<div class="ev-title">' + esc(ev.title) + '</div>' +
+        (sub ? '<div class="ev-sub">' + esc(sub) + '</div>' : '') +
+        '<div class="ev-tags">' + tagsHTML(ev, state === ' is-now') + '</div>' +
+        '<div class="ev-more">' + esc(printText(ev)) + '</div>' +
+      '</button></li>';
+  }
+  function gapHTML(a, b, date) {
+    var g = C.gapBetween(a, b), text = '', cls = '';
+    if (g == null) return '';
+    if (g < 0) { text = C.fmtDur(-g) + ' 重なっています'; cls = ' over'; }
+    else if (g > 0) text = a.cat === 'move' && b.cat === 'move' ? '乗り換え ' + C.fmtDur(g) : 'あき ' + C.fmtDur(g);
+    var add = canEdit() && g >= 15 ? '<button type="button" class="gap-add" data-act="add" data-date="' + date + '" data-start="' + C.fromMin(C.endMin(a)) + '" data-end="' + b.start + '">' + ic('plus') + '入れる</button>' : '';
+    if (!text && !add) return '';
+    return '<li class="gap"><div></div><div class="rail"></div><div class="gap-t' + cls + '">' + (g < 0 ? ic('warn') : '') + '<span>' + text + '</span>' + add + '</div></li>';
+  }
+  function dayHeadHTML(t, date, i) {
+    var hol = C.holidayName(date), title = t.dayTitles[date] || '';
+    var tt = canEdit()
+      ? '<button type="button" class="day-t' + (title ? '' : ' empty') + '" data-act="day-title" data-date="' + date + '">' + esc(title || 'この日のひとこと（例：金沢 → 富山）') + '</button>'
+      : '<span class="day-t">' + esc(title) + '</span>';
+    return '<header class="day-h"><span class="day-n">' + (i + 1) + '日目</span><span class="day-d' + dayClass(date) + '">' + C.labelDate(date) + '</span>' +
+      (hol ? '<span class="day-hol">' + hol + '</span>' : '') + tt +
+      (canEdit() ? '<button type="button" class="icon-btn day-add" data-act="add" data-date="' + date + '" aria-label="' + C.labelDate(date) + 'に予定を追加" title="この日に予定を追加">' + ic('plus') + '</button>' : '') +
+      '</header>';
+  }
+  function nextCardHTML(t) {
+    if (phase(t).k !== 'during') return '';
+    var n = now(), today = C.isoDate(n), nm = n.getHours() * 60 + n.getMinutes();
+    var list = C.eventsOn(t, today).filter(function (e) { return !e.allDay && e.start; });
+    var cur = null, nxt = null;
+    list.forEach(function (e) {
+      var s = C.toMin(e.start), en = C.endMin(e); if (en == null) en = s + 30;
+      if (s <= nm && nm < en) cur = e;
+      else if (s > nm && !nxt) nxt = e;
+    });
+    if (cur) {
+      var left = C.endMin(cur) != null ? 'あと' + C.fmtDur(C.endMin(cur) - nm) + '（' + cur.end + ' まで）' : '';
+      return '<button type="button" class="next" data-act="open" data-id="' + cur.id + '"><small>いまの予定</small><strong>' + esc(cur.title) + '</strong><span>' +
+        esc([left, nxt ? '次は ' + nxt.start + ' ' + nxt.title : ''].filter(Boolean).join('　／　')) + '</span></button>';
+    }
+    if (nxt) return '<button type="button" class="next" data-act="open" data-id="' + nxt.id + '"><small>次の予定</small><strong><span class="num">' + nxt.start + '</span>　' + esc(nxt.title) + '</strong><span>あと' + C.fmtDur(C.toMin(nxt.start) - nm) + '</span></button>';
+    var tm = C.eventsOn(t, C.addDays(today, 1)).filter(function (e) { return !e.allDay && e.start; })[0];
+    if (tm && C.addDays(today, 1) <= t.endDate) return '<button type="button" class="next" data-act="open" data-id="' + tm.id + '"><small>きょうの予定は終わりました</small><strong>あしたは <span class="num">' + tm.start + '</span>　' + esc(tm.title) + '</strong></button>';
+    return '';
+  }
+  function listHTML(t) {
+    var days = C.tripDays(t), n = now(), today = C.isoDate(n), nowMin = n.getHours() * 60 + n.getMinutes();
+    var h = '<div class="wrap">' + nextCardHTML(t);
+    days.forEach(function (date, i) {
+      var list = C.eventsOn(t, date);
+      h += '<section class="day" data-date="' + date + '">' + dayHeadHTML(t, date, i);
+      if (!list.length) {
+        h += '<div class="empty-day"><span>この日の予定はまだありません</span>' + (canEdit() ? '<button type="button" class="btn small" data-act="add" data-date="' + date + '">' + ic('plus') + '予定を入れる</button>' : '') + '</div>';
+      } else {
+        h += '<ol class="tl">';
+        list.forEach(function (ev, k) {
+          if (k > 0) h += gapHTML(list[k - 1], ev, date);
+          h += evHTML(ev, date === today ? nowMin : null, date < today);
+        });
+        h += '</ol>';
+      }
+      h += '</section>';
+    });
+    var out = t.events.filter(function (e) { return days.indexOf(e.date) < 0; });
+    if (out.length) {
+      h += '<section class="day"><header class="day-h"><span class="day-d">日程の外の予定</span><span class="day-t">' + out.length + '件。日にちを直すか、旅行の日付を広げてください</span></header><ol class="tl">' +
+        C.sortEvents(out).map(function (ev) { return evHTML(ev, null, false); }).join('') + '</ol></section>';
+    }
+    if (canEdit()) h += '<div class="list-foot"><button type="button" class="btn small" data-act="add-day">' + ic('plus') + '1日ふやす</button><button type="button" class="btn small" data-act="trip-edit">' + ic('gear') + '旅行の名前・日付</button></div>';
+    return h + '</div>';
+  }
+
+  // ---------- 時間割 ----------
+  function gridHTML(t) {
+    var days = C.tripDays(t), lo = 7, hi = 21, today = C.isoDate(now());
+    t.events.forEach(function (ev) {
+      var s = C.toMin(ev.start);
+      if (ev.allDay || s == null || days.indexOf(ev.date) < 0) return;
+      var e = C.endMin(ev); if (e == null) e = s + 30;
+      lo = Math.min(lo, Math.floor(s / 60));
+      hi = Math.max(hi, Math.ceil(Math.min(1440, e) / 60));
+    });
+    G.lo = lo; G.hi = hi; G.H = Math.round(56 * (D.prefs.zoom || 1));
+    var rows = hi - lo, ppm = G.H / 60;
+    var h = '<div class="grid-tools"><p>' + (canEdit() ? '予定をドラッグ（スマホは長押ししてから）で時間を動かせます。あいている所を押すと追加。' : '予定を押すと、くわしい情報が見られます。') + '</p>' +
+      '<button type="button" class="icon-btn" data-act="zoom" data-d="-1" aria-label="表示を小さく" title="表示を小さく">' + ic('zout') + '</button>' +
+      '<button type="button" class="icon-btn" data-act="zoom" data-d="1" aria-label="表示を大きく" title="表示を大きく">' + ic('zin') + '</button></div>';
+    h += '<div class="grid" style="--n:' + days.length + ';--rows:' + rows + ';--hour:' + G.H + 'px">';
+    h += '<div class="g-corner"></div>';
+    days.forEach(function (date, i) {
+      var hol = C.holidayName(date);
+      h += '<div class="g-dayh' + dayClass(date) + (date === today ? ' today' : '') + '" data-date="' + date + '"><b>' + (i + 1) + '日目</b><span>' + C.shortDate(date) + '</span>' + (hol ? '<small>' + hol + '</small>' : '') + '</div>';
+    });
+    var loose = t.events.filter(function (e) { return (e.allDay || !e.start) && days.indexOf(e.date) >= 0; });
+    if (loose.length) {
+      h += '<div class="g-allc">終日<br>未定</div>';
+      days.forEach(function (date) {
+        h += '<div class="g-all">' + C.sortEvents(loose.filter(function (e) { return e.date === date; })).map(function (ev) {
+          return '<button type="button" class="g-chip cat-' + ev.cat + '" data-act="open" data-id="' + ev.id + '">' + esc(ev.title) + '</button>';
+        }).join('') + '</div>';
+      });
+    }
+    h += '<div class="g-axis">';
+    for (var hr = lo; hr <= hi; hr++) h += '<span class="num" style="top:' + ((hr - lo) * G.H) + 'px">' + (hr === lo ? '' : hr + ':00') + '</span>';
+    h += '</div>';
+    var n = now(), nm = n.getHours() * 60 + n.getMinutes();
+    days.forEach(function (date) {
+      h += '<div class="g-col" data-date="' + date + '">';
+      C.layoutDay(C.eventsOn(t, date), 22 / ppm).forEach(function (it) {
+        var ev = it.ev, top = (it.s - lo * 60) * ppm, height = Math.max(20, (it.e - it.s) * ppm - 2);
+        var w = 100 / it.cols;
+        h += '<button type="button" class="g-ev cat-' + ev.cat + (height < 36 ? ' short' : '') + (ev.tentative ? ' tent' : '') + (ev.warn ? ' warn' : '') + '" data-act="open" data-id="' + ev.id + '" ' +
+          'style="--lines:' + Math.max(1, Math.floor((height - 22) / 16)) + ';top:' + top.toFixed(1) + 'px;height:' + height.toFixed(1) + 'px;left:calc(' + (it.col * w) + '% + 2px);width:calc(' + w + '% - 4px)">' +
+          '<b>' + esc(ev.title) + '</b><span class="num">' + ev.start + (ev.end ? '–' + ev.end : '') + '</span>' +
+          (height >= 30 ? '<i class="g-grip" aria-hidden="true"></i>' : '') + '</button>';
+      });
+      if (date === today && nm >= lo * 60 && nm <= hi * 60) h += '<div class="g-now" style="top:' + ((nm - lo * 60) * ppm) + 'px"></div>';
+      h += '</div>';
+    });
+    return h + '</div>';
+  }
+
+  // ---------- まとめ ----------
+  function rowHTML(ev, right, sub, cls) {
+    return '<li><button type="button" class="row cat-' + ev.cat + (cls || '') + '" data-act="open" data-id="' + ev.id + '"><span class="dot">' + ic(evIcon(ev)) + '</span>' +
+      '<span><span class="row-t">' + esc(ev.title) + '</span><span class="row-s">' + esc(sub) + '</span></span><span class="row-r">' + right + '</span></button></li>';
+  }
+  function whenShort(ev) { return C.shortDate(ev.date) + (ev.start ? ' ' + ev.start : ''); }
+  function sumHTML(t) {
+    var evs = orderedEvents(t), h = '<div class="wrap"><div class="sum">';
+    // 旅のメモ
+    h += '<section><h2>' + esc(t.title) + '<small>' + esc(rangeLabel(t) + '・' + C.nightsLabel(t)) + '</small></h2>' +
+      (t.note ? '<p class="sum-note">' + linkify(t.note) + '</p>' : '<p class="muted">旅行のメモはまだありません。</p>') +
+      (canEdit() ? '<div class="list-foot" style="padding-top:10px"><button type="button" class="btn small" data-act="trip-edit">' + ic('gear') + '旅行の名前・日付・メモ</button></div>' : '') + '</section>';
+    // 準備リスト
+    var done = t.todos.filter(function (x) { return x.done; }).length;
+    h += '<section><h2>準備リスト<small>' + (t.todos.length ? done + ' / ' + t.todos.length + ' 済み' : '') + '</small></h2>';
+    if (t.todos.length) {
+      h += '<ul class="rows">' + t.todos.map(function (x) {
+        return '<li class="todo-row"><label><input type="checkbox" data-change="todo" data-id="' + x.id + '"' + (x.done ? ' checked' : '') + (Host.canEdit ? '' : ' disabled') + '><span>' + esc(x.text) + '</span></label>' +
+          (canEdit() ? '<button type="button" class="icon-btn" data-act="todo-del" data-id="' + x.id + '" aria-label="「' + esc(x.text) + '」を消す">' + ic('x') + '</button>' : '<span></span>') + '</li>';
+      }).join('') + '</ul>';
+    } else h += '<p class="muted">予約や持ち物など、出発までにやることを書いておけます。</p>';
+    if (canEdit()) h += '<form class="todo-add" id="todo-form"><input type="text" id="todo-text" placeholder="やること・持ち物を追加" autocomplete="off" aria-label="準備リストに追加"><button type="submit" class="btn">追加</button></form>';
+    h += '</section>';
+    // 要確認
+    var warns = evs.filter(function (e) { return e.warn || e.tentative; });
+    h += '<section><h2>要確認・仮の予定<small>' + warns.length + '件</small></h2>';
+    h += warns.length ? '<ul class="rows">' + warns.map(function (e) {
+      return rowHTML(e, whenShort(e), e.warn ? e.warn.split('\n')[0] : '時刻・内容が仮のままです', e.warn ? ' warn-row' : '');
+    }).join('') + '</ul>' : '<p class="muted">気になる点のある予定はありません。</p>';
+    h += '</section>';
+    // 予約
+    var res = evs.filter(function (e) { return e.reserve; });
+    var todo = res.filter(function (e) { return e.reserve === 'todo'; }).length;
+    h += '<section><h2>予約<small>' + (res.length ? 'これから ' + todo + '件・済み ' + (res.length - todo) + '件' : '') + '</small></h2>';
+    h += res.length ? '<ul class="rows">' + res.map(function (e) {
+      return rowHTML(e, e.reserve === 'done' ? '<span class="tag done">' + ic('check') + '予約済み</span>' : '<span class="tag">未予約</span>', whenShort(e) + (e.reserveNo ? '・' + e.reserveNo : (e.line ? '・' + e.line : '')));
+    }).join('') + '</ul>' : '<p class="muted">予約が必要な予定に「これから予約」と付けると、ここに並びます。</p>';
+    h += '</section>';
+    // 宿
+    var stays = evs.filter(function (e) { return e.cat === 'stay'; });
+    if (stays.length) {
+      h += '<section><h2>宿</h2><ul class="rows">' + stays.map(function (e) {
+        var p = e.places[0] || {};
+        return rowHTML(e, C.shortDate(e.date), [p.name, p.tel].filter(Boolean).join('・') || '場所が未入力です');
+      }).join('') + '</ul></section>';
+    }
+    // 費用
+    var total = C.totalCost(t), paid = evs.filter(function (e) { return e.cost !== ''; });
+    h += '<section><h2>費用<small>入力した分の合計</small></h2>';
+    if (paid.length) {
+      var by = {};
+      paid.forEach(function (e) { by[e.cat] = (by[e.cat] || 0) + (+e.cost); });
+      h += '<div class="big">' + C.yen(total) + '</div><div class="cost-bar">' + C.CAT_ORDER.filter(function (k) { return by[k]; }).map(function (k) {
+        return '<i class="cat-' + k + '" style="flex:' + by[k] + '"></i>';
+      }).join('') + '</div><div class="cost-leg">' + C.CAT_ORDER.filter(function (k) { return by[k]; }).map(function (k) {
+        return '<span class="cat-' + k + '">' + C.CATS[k].label + ' ' + C.yen(by[k]) + '</span>';
+      }).join('') + '</div><ul class="rows" style="margin-top:10px">' + paid.map(function (e) { return rowHTML(e, '<span class="num">' + C.yen(e.cost) + '</span>', whenShort(e)); }).join('') + '</ul>';
+    } else h += '<p class="muted">まだ金額が入っていません。予定の編集で「費用」を入れると、ここに合計が出ます。</p>';
+    h += '</section>';
+    return h + '</div></div>';
+  }
+
+  // ---------- 日チップの現在位置 ----------
+  function spy() {
+    var chips = $$('#chips .chip');
+    if (!chips.length) return;
+    var cur = '';
+    // 日チップを押した直後は、スクロールの途中経過で上書きしない
+    if (UI.day && Date.now() < (UI.jumpLock || 0)) cur = UI.day;
+    else if (UI.tab === 'list') {
+      var top = mainEl.scrollTop + 60;
+      $$('.day[data-date]', mainEl).forEach(function (s) { if (s.offsetTop <= top) cur = s.dataset.date; });
+      if (!cur && chips[0]) cur = chips[0].dataset.date;
+    } else if (UI.tab === 'grid') {
+      var left = mainEl.scrollLeft + 44 + 20;
+      $$('.g-col', mainEl).forEach(function (c) { if (c.offsetLeft <= left) cur = c.dataset.date; });
+    }
+    UI.day = cur;
+    chips.forEach(function (c) {
+      var on = c.dataset.date === cur;
+      if (on && c.getAttribute('aria-current') !== 'true') {
+        var box = $('#chips'), l = c.offsetLeft - box.offsetLeft;
+        if (l < box.scrollLeft || l + c.offsetWidth > box.scrollLeft + box.clientWidth) box.scrollLeft = Math.max(0, l - 16);
+      }
+      c.setAttribute('aria-current', on ? 'true' : 'false');
+    });
+  }
+
+  // ---------- シート ----------
+  var INPUT_SHEETS = { form: 1, 'trip-form': 1, 'day-title': 1, copy: 1 };
+  var TALL = { form: 1, 'trip-form': 1 };
+  function openSheet(s) { UI.sheets.push(s); drawSheet(true); }
+  function closeSheet() { UI.sheets.pop(); drawSheet(true); }
+  function closeAll() { UI.sheets = []; drawSheet(false); }
+  function head(title, extra) {
+    return '<div class="sheet-head"><h2>' + title + '</h2>' + (extra || '') + '<button type="button" class="icon-btn" data-act="close" aria-label="閉じる">' + ic('x') + '</button></div>';
+  }
+  function drawSheet(focus) {
+    var s = UI.sheets[UI.sheets.length - 1];
+    if (!s) { sheetEl.hidden = true; scrimEl.hidden = true; sheetEl.innerHTML = ''; return; }
+    if (s.type === 'detail' && !findEv(s.id)) { UI.sheets.pop(); return drawSheet(focus); }
+    var keep = !focus && $('.sheet-body', sheetEl) ? $('.sheet-body', sheetEl).scrollTop : 0;
+    sheetEl.className = 'sheet' + (TALL[s.type] ? ' tall' : '');
+    sheetEl.innerHTML = SHEETS[s.type](s);
+    sheetEl.hidden = false; scrimEl.hidden = false;
+    var body = $('.sheet-body', sheetEl);
+    if (body) body.scrollTop = keep;
+    if (focus) {
+      var af = $('[data-autofocus]', sheetEl);
+      if (af && !('ontouchstart' in window)) af.focus(); else sheetEl.focus();
+    }
+    if (s.type === 'form') initForm();
+  }
+
+  function mapUrl(p) {
+    var q = [p.name.replace(/[（(].*?[）)]/g, ' '), p.address.replace(/^〒\s*[\d-]+\s*/, '')].filter(function (x) { return x.trim(); }).join(' ');
+    return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(q.trim());
+  }
+  function routeLink(ev) {
+    if (!ev.from || !ev.to || ev.cat !== 'move') return '';
+    if (ev.mode === 'car' || ev.mode === 'walk') {
+      return '<a class="btn small" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&origin=' + encodeURIComponent(ev.from) + '&destination=' + encodeURIComponent(ev.to) + '&travelmode=' + (ev.mode === 'car' ? 'driving' : 'walking') + '">' + ic('map') + '道順を地図で見る</a>';
+    }
+    if (ev.mode === 'plane') return '';
+    var d = ev.date.split('-'), t = ev.start || '';
+    var u = 'https://transit.yahoo.co.jp/search/result?from=' + encodeURIComponent(ev.from) + '&to=' + encodeURIComponent(ev.to) + '&y=' + d[0] + '&m=' + d[1] + '&d=' + d[2] +
+      (t ? '&hh=' + t.slice(0, 2) + '&m1=' + t.charAt(3) + '&m2=' + t.charAt(4) : '') + '&type=1';
+    return '<a class="btn small" target="_blank" rel="noopener" href="' + esc(u) + '">' + ic('route') + '乗換案内でしらべる</a>';
+  }
+  function placeHTML(p, i, n) {
+    var url = safeUrl(p.url), tel = p.tel.replace(/[^\d+]/g, '');
+    var h = '<div class="place"><h4>' + (n > 1 ? '<small>候補' + (i + 1) + '</small>' : '') + '<span>' + esc(p.name || '場所') + '</span></h4>';
+    if (p.address) h += '<div class="kv">' + ic('pin') + '<div>' + esc(p.address) + '</div></div>';
+    if (p.tel) h += '<div class="kv">' + ic('phone') + '<div class="num">' + esc(p.tel) + '</div></div>';
+    if (p.hours) h += '<div class="kv">' + ic('clock') + '<div>' + esc(p.hours) + '</div></div>';
+    if (p.note) h += '<div class="kv">' + ic('note') + '<div>' + linkify(p.note) + '</div></div>';
+    h += '<div class="acts">';
+    if (p.name || p.address) h += '<a class="btn small" target="_blank" rel="noopener" href="' + esc(mapUrl(p)) + '">' + ic('map') + '地図をひらく</a>';
+    if (tel) h += '<a class="btn small" href="tel:' + tel + '">' + ic('phone') + '電話する</a>';
+    if (url) h += '<a class="btn small" target="_blank" rel="noopener" href="' + esc(url) + '">' + ic('link') + 'サイトを見る</a>';
+    if (p.address) h += '<button type="button" class="btn small" data-act="copy" data-text="' + esc(p.address.replace(/^〒\s*[\d-]+\s*/, '')) + '" data-what="住所">' + ic('copy') + '住所をコピー</button>';
+    if (tel) h += '<button type="button" class="btn small" data-act="copy" data-text="' + esc(p.tel) + '" data-what="電話番号">' + ic('copy') + '番号をコピー</button>';
+    return h + '</div></div>';
+  }
+  var SHEETS = {};
+  SHEETS.detail = function (s) {
+    var ev = findEv(s.id), t = trip(), all = orderedEvents(t), idx = all.indexOf(ev);
+    var days = C.tripDays(t), di = days.indexOf(ev.date), dur = C.duration(ev);
+    var nav = '<button type="button" class="icon-btn" data-act="open-rel" data-id="' + (idx > 0 ? all[idx - 1].id : '') + '" aria-label="前の予定"' + (idx > 0 ? '' : ' disabled') + '>' + ic('left') + '</button>' +
+      '<button type="button" class="icon-btn" data-act="open-rel" data-id="' + (idx < all.length - 1 ? all[idx + 1].id : '') + '" aria-label="次の予定"' + (idx < all.length - 1 ? '' : ' disabled') + '>' + ic('right') + '</button>';
+    var h = '<div class="sheet-head cat-' + ev.cat + '"><span class="d-cat" style="flex:1"><span class="dot">' + ic(evIcon(ev)) + '</span>' + esc(catLabel(ev)) + '</span>' + nav +
+      '<button type="button" class="icon-btn" data-act="close" aria-label="閉じる">' + ic('x') + '</button></div>';
+    h += '<div class="sheet-body cat-' + ev.cat + '"><h2 class="d-title">' + esc(ev.title) + '</h2>';
+    h += '<div class="d-when"><span class="num">' + (ev.allDay ? '終日' : ev.start ? ev.start + (ev.end ? ' – ' + ev.end : '') : '時刻未定') + '</span>' +
+      '<span>' + C.labelDate(ev.date) + (di >= 0 ? '・' + (di + 1) + '日目' : '') + (dur ? '・' + C.fmtDur(dur) : '') + '</span>' +
+      (ev.tentative ? '<span class="tag">仮の時刻</span>' : '') + '</div>';
+    if (ev.warn) h += '<div class="d-warn">' + ic('warn') + '<div>' + linkify(ev.warn) + '</div></div>';
+    if (ev.from || ev.to || ev.line || ev.seat) {
+      h += '<section class="d-sec"><h3>区間</h3>';
+      if (ev.from || ev.to) {
+        h += '<div class="route"><div class="route-p"><i></i><b>' + esc(ev.from || '？') + '</b><span class="num">' + esc(ev.start) + '</span></div>' +
+          '<div class="route-p"><i></i><b>' + esc(ev.to || '？') + '</b><span class="num">' + esc(ev.end) + '</span></div></div>';
+      }
+      if (ev.line) h += '<div class="kv">' + ic(evIcon(ev)) + '<div>' + esc(ev.line) + '</div></div>';
+      if (ev.seat) h += '<div class="kv">' + ic('ticket') + '<div><small>座席・のりば</small>' + esc(ev.seat) + '</div></div>';
+      var rl = routeLink(ev);
+      if (rl) h += '<div class="acts">' + rl + '</div>';
+      h += '</section>';
+    }
+    if (ev.places.length) {
+      h += '<section class="d-sec"><h3>' + (ev.places.length > 1 ? '場所（候補 ' + ev.places.length + 'か所）' : '場所・連絡先') + '</h3>' +
+        ev.places.map(function (p, i) { return placeHTML(p, i, ev.places.length); }).join('') + '</section>';
+    }
+    if (ev.reserve || ev.reserveNo) {
+      h += '<section class="d-sec"><h3>予約</h3><div class="kv">' + ic('ticket') + '<div>' +
+        (ev.reserve === 'done' ? '<span class="tag done">' + ic('check') + '予約済み</span>' : ev.reserve === 'todo' ? '<span class="tag">まだ予約していません</span>' : '') +
+        (ev.reserveNo ? '<div style="margin-top:6px"><small>予約番号・メモ</small><span class="num">' + esc(ev.reserveNo) + '</span></div>' : '') + '</div></div><div class="acts">' +
+        (ev.reserveNo ? '<button type="button" class="btn small" data-act="copy" data-text="' + esc(ev.reserveNo) + '" data-what="予約番号">' + ic('copy') + '予約番号をコピー</button>' : '') +
+        (canEdit() && ev.reserve === 'todo' ? '<button type="button" class="btn small" data-act="reserve" data-id="' + ev.id + '" data-v="done">' + ic('check') + '予約済みにする</button>' : '') +
+        (canEdit() && ev.reserve === 'done' ? '<button type="button" class="btn small" data-act="reserve" data-id="' + ev.id + '" data-v="todo">未予約に戻す</button>' : '') +
+        '</div></section>';
+    }
+    if (ev.cost !== '') h += '<section class="d-sec"><h3>費用</h3><div class="kv">' + ic('yen') + '<div class="num">' + C.yen(ev.cost) + '</div></div></section>';
+    if (ev.note) h += '<section class="d-sec"><h3>メモ</h3><p class="d-note">' + linkify(ev.note) + '</p></section>';
+    if (!ev.warn && !ev.from && !ev.to && !ev.line && !ev.seat && !ev.places.length && !ev.reserve && !ev.reserveNo && ev.cost === '' && !ev.note) {
+      h += '<p class="muted" style="margin-top:16px">くわしい情報はまだ入っていません。' + (canEdit() ? '「編集」から、場所・電話・予約番号・メモなどを足せます。' : '') + '</p>';
+    }
+    h += '</div>';
+    if (canEdit()) {
+      h += '<div class="sheet-foot"><button type="button" class="btn primary grow" data-act="edit" data-id="' + ev.id + '">' + ic('edit') + '編集</button>' +
+        (ev.start && !ev.allDay ? '<button type="button" class="btn grow" data-act="shift-open" data-id="' + ev.id + '">' + ic('shift') + 'ずらす</button>' : '') +
+        '<button type="button" class="btn grow" data-act="dup" data-id="' + ev.id + '">' + ic('copy') + '複製</button>' +
+        '<button type="button" class="btn danger" data-act="del" data-id="' + ev.id + '" aria-label="この予定を削除">' + ic('trash') + '</button></div>';
+    }
+    return h;
+  };
+  SHEETS.shift = function (s) {
+    var ev = findEv(s.id);
+    if (!ev) return head('時間をずらす');
+    var after = C.eventsOn(trip(), ev.date).filter(function (e) { return e !== ev && !e.allDay && C.toMin(e.start) != null && C.toMin(e.start) >= C.toMin(ev.start); }).length;
+    return head('時間をずらす') + '<div class="sheet-body"><p class="d-note"><b>' + esc(ev.title) + '</b></p>' +
+      '<div class="d-when" style="margin:6px 0 14px"><span class="num">' + ev.start + (ev.end ? ' – ' + ev.end : '') + '</span><span>' + C.labelDate(ev.date) + '</span></div>' +
+      '<div class="legend">早める</div><div class="shift-row" style="margin:6px 0 12px">' + [-60, -30, -15, -5].map(function (m) { return '<button type="button" class="btn" data-act="shift" data-id="' + ev.id + '" data-m="' + m + '">' + (-m) + '分</button>'; }).join('') + '</div>' +
+      '<div class="legend">遅らせる</div><div class="shift-row" style="margin:6px 0 12px">' + [5, 15, 30, 60].map(function (m) { return '<button type="button" class="btn" data-act="shift" data-id="' + ev.id + '" data-m="' + m + '">' + m + '分</button>'; }).join('') + '</div>' +
+      '<label class="check"><input type="checkbox" id="shift-follow"' + (s.follow ? ' checked' : '') + (after ? '' : ' disabled') + '><span>この日の、これより後の予定（' + after + '件）もいっしょにずらす</span></label>' +
+      '</div><div class="sheet-foot"><button type="button" class="btn primary grow" data-act="close">できた</button></div>';
+  };
+
+  // ---- 予定のフォーム ----
+  function placeFieldHTML(p, i) {
+    p = p || {};
+    function inp(k, label, type, ph) {
+      return '<label class="field"><span>' + label + '</span><input type="' + (type || 'text') + '" data-k="' + k + '" value="' + esc(p[k] || '') + '" placeholder="' + (ph || '') + '" autocomplete="off"></label>';
+    }
+    return '<div class="place-f"><div class="place-f-h"><span class="place-n">場所 ' + (i + 1) + '</span><button type="button" class="btn small danger" data-act="place-del">この場所を消す</button></div>' +
+      inp('name', '名前', 'text', '例：近江町市場') + inp('address', '住所', 'text', '地図をひらくときに使います') + inp('tel', '電話', 'tel', '') +
+      inp('hours', '営業時間・受付時間', 'text', '例：9:00〜17:00') + inp('url', 'サイトの URL', 'url', 'https://') + inp('note', 'ひとこと', 'text', '') + '</div>';
+  }
+  SHEETS.form = function (s) {
+    var t = trip(), ev = s.ev, days = C.tripDays(t);
+    var dateOpts = days.map(function (d, i) { return '<option value="' + d + '"' + (d === ev.date ? ' selected' : '') + '>' + (i + 1) + '日目　' + C.shortDate(d) + '</option>'; }).join('');
+    if (days.indexOf(ev.date) < 0) dateOpts += '<option value="' + ev.date + '" selected>' + C.shortDate(ev.date) + '（日程の外）</option>';
+    var cats = C.CAT_ORDER.map(function (k) {
+      return '<label class="cat-' + k + '"><input type="radio" name="cat" value="' + k + '"' + (ev.cat === k ? ' checked' : '') + '><span>' + ic(k === 'move' ? 'train' : k) + C.CATS[k].label + '</span></label>';
+    }).join('');
+    var modes = C.MODE_ORDER.map(function (k) {
+      return '<label><input type="radio" name="mode" value="' + k + '"' + (ev.mode === k ? ' checked' : '') + '><span>' + ic(k) + C.MODES[k] + '</span></label>';
+    }).join('');
+    var hasPlace = ev.places.length > 0, hasRes = ev.reserve || ev.reserveNo || ev.cost !== '', hasNote = ev.note || ev.warn;
+    var h = head(s.isNew ? '予定を追加' : '予定を編集');
+    h += '<div class="sheet-body"><form id="ev-form" data-cat="' + ev.cat + '" data-allday="' + (ev.allDay ? 1 : 0) + '" novalidate>';
+    h += '<label class="field"><span>予定の名前</span><input type="text" id="f-title" name="title" value="' + esc(s.isNew ? '' : ev.title) + '" placeholder="例：近江町市場で朝ごはん" autocomplete="off" enterkeyhint="done"' + (s.isNew ? ' data-autofocus' : '') + '></label>';
+    h += '<div class="field"><span class="legend">種類</span><div class="seg" id="f-cat">' + cats + '</div></div>';
+    h += '<div class="only-move"><div class="field"><span class="legend">手段</span><div class="seg plain" id="f-mode">' + modes + '</div></div></div>';
+    h += '<div class="two"><label class="field"><span>日にち</span><select id="f-date" name="date">' + dateOpts + '</select></label>' +
+      '<div class="field"><span class="legend">&nbsp;</span><label class="check"><input type="checkbox" id="f-allday" name="allDay"' + (ev.allDay ? ' checked' : '') + '><span>時刻なし（終日）</span></label></div></div>';
+    h += '<div class="only-timed"><div class="two"><label class="field"><span>開始</span><input type="time" id="f-start" name="start" value="' + esc(ev.start) + '"></label>' +
+      '<label class="field"><span>終了</span><input type="time" id="f-end" name="end" value="' + esc(ev.end) + '"></label></div>' +
+      '<div class="quick" id="f-quick">' + [[30, '30分'], [60, '1時間'], [90, '1時間半'], [120, '2時間'], [180, '3時間']].map(function (q) { return '<button type="button" data-act="dur" data-m="' + q[0] + '">' + q[1] + '</button>'; }).join('') +
+      '<button type="button" data-act="dur" data-m="0">終了なし</button></div>' +
+      '<label class="check"><input type="checkbox" id="f-tent" name="tentative"' + (ev.tentative ? ' checked' : '') + '><span>時刻はまだ仮（「仮」と表示）</span></label></div>';
+    h += '<div class="only-move"><details class="group" open><summary>区間・便<small>出発地と到着地、列車名や座席</small></summary>' +
+      '<div class="two"><label class="field"><span>出発地</span><input type="text" id="f-from" name="from" value="' + esc(ev.from) + '" placeholder="例：博多" autocomplete="off"></label>' +
+      '<label class="field"><span>到着地</span><input type="text" id="f-to" name="to" value="' + esc(ev.to) + '" placeholder="例：新大阪" autocomplete="off"></label></div>' +
+      '<label class="field"><span>便名・列車名</span><input type="text" id="f-line" name="line" value="' + esc(ev.line) + '" placeholder="例：のぞみ14号" autocomplete="off"></label>' +
+      '<label class="field"><span>座席・のりば</span><input type="text" id="f-seat" name="seat" value="' + esc(ev.seat) + '" placeholder="例：7号車 12番A・B" autocomplete="off"></label></details></div>';
+    h += '<details class="group"' + (hasPlace ? ' open' : '') + '><summary>場所・連絡先<small>住所・電話・営業時間</small></summary><div id="f-places">' +
+      ev.places.map(placeFieldHTML).join('') + '</div><div class="list-foot" style="padding-top:10px"><button type="button" class="btn small" data-act="place-add">' + ic('plus') + '<span id="place-add-label">' + (hasPlace ? '候補をもう1つ足す' : '場所を入れる') + '</span></button></div></details>';
+    h += '<details class="group"' + (hasRes ? ' open' : '') + '><summary>予約・費用</summary>' +
+      '<div class="field"><span class="legend">予約</span><div class="seg plain" id="f-reserve">' + [['', 'いらない'], ['todo', 'これから予約'], ['done', '予約済み']].map(function (r) {
+        return '<label><input type="radio" name="reserve" value="' + r[0] + '"' + (ev.reserve === r[0] ? ' checked' : '') + '><span>' + r[1] + '</span></label>';
+      }).join('') + '</div></div>' +
+      '<label class="field"><span>予約番号・予約のメモ</span><input type="text" id="f-resno" name="reserveNo" value="' + esc(ev.reserveNo) + '" autocomplete="off"></label>' +
+      '<label class="field"><span>費用（円）</span><input type="number" id="f-cost" name="cost" value="' + esc(ev.cost) + '" min="0" step="1" inputmode="numeric" placeholder="合計の金額"></label></details>';
+    h += '<details class="group"' + (hasNote ? ' open' : '') + '><summary>メモ・注意</summary>' +
+      '<label class="field"><span>メモ</span><textarea id="f-note" name="note" placeholder="持ち物、集合場所、気づいたことなど">' + esc(ev.note) + '</textarea></label>' +
+      '<label class="field"><span>注意・要確認（目立つ色で表示）</span><textarea id="f-warn" name="warn" placeholder="例：最終入店は14:00">' + esc(ev.warn) + '</textarea></label></details>';
+    h += '<p class="err" id="f-err" hidden></p></form></div>';
+    h += '<div class="sheet-foot"><button type="button" class="btn" data-act="close">やめる</button><button type="submit" form="ev-form" class="btn primary grow">' + (s.isNew ? '追加する' : '保存する') + '</button></div>';
+    return h;
+  };
+  function initForm() {
+    var f = $('#ev-form');
+    if (!f) return;
+    f.dataset.prevStart = f.elements.start.value;
+    f.addEventListener('change', function (e) {
+      var n = e.target.name;
+      if (n === 'cat') f.dataset.cat = e.target.value;
+      if (n === 'allDay') f.dataset.allday = e.target.checked ? 1 : 0;
+      if (n === 'start') {
+        // 開始を動かしたら、長さを保ったまま終了も動かす
+        var prev = C.toMin(f.dataset.prevStart), cur = C.toMin(f.elements.start.value), end = C.toMin(f.elements.end.value);
+        if (prev != null && cur != null && end != null && end > prev) f.elements.end.value = C.fromMin(Math.min(1439, end + (cur - prev)));
+        f.dataset.prevStart = f.elements.start.value;
+      }
+    });
+  }
+  function readForm(s) {
+    var f = $('#ev-form'), err = $('#f-err');
+    function v(n) { return f.elements[n] ? String(f.elements[n].value || '').trim() : ''; }
+    var places = $$('.place-f', f).map(function (box) {
+      var p = {};
+      $$('[data-k]', box).forEach(function (i) { p[i.dataset.k] = i.value.trim(); });
+      return p;
+    });
+    var allDay = f.elements.allDay.checked, cat = v('cat') || 'other';
+    var o = {
+      id: s.ev.id, title: v('title'), cat: cat, mode: cat === 'move' ? v('mode') : '', date: v('date'), allDay: allDay,
+      start: allDay ? '' : v('start'), end: allDay ? '' : v('end'), tentative: !allDay && f.elements.tentative.checked,
+      from: cat === 'move' ? v('from') : '', to: cat === 'move' ? v('to') : '', line: cat === 'move' ? v('line') : '', seat: cat === 'move' ? v('seat') : '',
+      places: places, reserve: v('reserve'), reserveNo: v('reserveNo'), cost: v('cost'), note: f.elements.note.value.trim(), warn: f.elements.warn.value.trim()
+    };
+    var msg = '';
+    if (!o.title) { msg = '予定の名前を入れてください。'; f.elements.title.focus(); }
+    else if (!allDay && o.end && !o.start) { msg = '終了だけが入っています。開始の時刻も入れてください。'; f.elements.start.focus(); }
+    err.textContent = msg; err.hidden = !msg;
+    if (msg) { err.scrollIntoView({ block: 'nearest' }); return null; }
+    return C.normEvent(o);
+  }
+  function blankEvent(date, start, end) {
+    return C.normEvent({ id: C.newId('e'), date: date, start: start || '', end: end || '', title: ' ', cat: 'spot' });
+  }
+  function defaultDate() {
+    var t = trip(), days = C.tripDays(t);
+    if (UI.day && days.indexOf(UI.day) >= 0) return UI.day;
+    var today = C.isoDate(now());
+    return days.indexOf(today) >= 0 ? today : days[0];
+  }
+  function openNew(date, start, end) {
+    var t = trip();
+    if (!t) return;
+    date = date || defaultDate();
+    if (!start) {
+      // その日の最後の予定のあとに置く
+      var last = C.eventsOn(t, date).filter(function (e) { return !e.allDay && e.start; }).pop();
+      if (last) { var s0 = C.endMin(last) != null ? C.endMin(last) : C.toMin(last.start) + 30; if (s0 <= 1380) { start = C.fromMin(s0); end = C.fromMin(Math.min(1439, s0 + 60)); } }
+      else { start = '09:00'; end = '10:00'; }
+    }
+    openSheet({ type: 'form', isNew: true, ev: blankEvent(date, start, end) });
+  }
+
+  // ---- 旅行の一覧・設定 ----
+  SHEETS.trips = function () {
+    var h = head('旅行の一覧') + '<div class="sheet-body"><ul class="menu">';
+    if (!D.trips.length) h += '<li><p class="muted" style="padding:12px 4px">旅行はまだありません。</p></li>';
+    D.trips.slice().sort(function (a, b) { return a.startDate < b.startDate ? 1 : -1; }).forEach(function (t) {
+      h += '<li class="trip-row' + (t.id === D.cur ? ' cur' : '') + '"><button type="button" data-act="trip-pick" data-id="' + t.id + '">' + ic('cal') + '<span><b>' + esc(t.title) + '</b><small>' + esc(rangeLabel(t) + '・' + C.nightsLabel(t) + '・予定 ' + t.events.length + '件') + '</small></span></button>' +
+        (Host.canEdit ? '<span><button type="button" class="icon-btn" data-act="trip-dup" data-id="' + t.id + '" aria-label="「' + esc(t.title) + '」を複製" title="複製">' + ic('copy') + '</button>' +
+          '<button type="button" class="icon-btn" data-act="trip-del" data-id="' + t.id + '" aria-label="「' + esc(t.title) + '」を削除" title="削除">' + ic('trash') + '</button></span>' : '<span></span>') + '</li>';
+    });
+    h += '</ul></div>';
+    if (Host.canEdit) h += '<div class="sheet-foot"><button type="button" class="btn primary grow" data-act="trip-new">' + ic('plus') + '新しい旅行をつくる</button></div>';
+    return h;
+  };
+  SHEETS['trip-form'] = function (s) {
+    var t = s.id ? D.trips.filter(function (x) { return x.id === s.id; })[0] : null;
+    var today = C.isoDate(now());
+    var v = t || { title: '', startDate: today, endDate: C.addDays(today, 1), note: '' };
+    return head(t ? '旅行の名前・日付' : '新しい旅行') + '<div class="sheet-body"><form id="trip-form" data-id="' + (t ? t.id : '') + '" novalidate>' +
+      '<label class="field"><span>旅行の名前</span><input type="text" id="t-title" name="title" value="' + esc(v.title) + '" placeholder="例：京都 2泊3日" autocomplete="off"' + (t ? '' : ' data-autofocus') + '></label>' +
+      '<div class="two"><label class="field"><span>出発の日</span><input type="date" id="t-start" name="start" value="' + v.startDate + '"></label>' +
+      '<label class="field"><span>帰る日</span><input type="date" id="t-end" name="end" value="' + v.endDate + '"></label></div>' +
+      (t && t.events.length ? '<label class="check"><input type="checkbox" id="t-move" name="move" checked><span>出発の日を変えたら、予定の日にちもいっしょにずらす</span></label>' : '') +
+      '<label class="field"><span>メモ（メンバー、集合場所、緊急連絡先など）</span><textarea id="t-note" name="note">' + esc(v.note) + '</textarea></label>' +
+      '<p class="err" id="t-err" hidden></p></form></div>' +
+      '<div class="sheet-foot"><button type="button" class="btn" data-act="close">やめる</button><button type="submit" form="trip-form" class="btn primary grow">' + (t ? '保存する' : 'つくる') + '</button></div>';
+  };
+  SHEETS['day-title'] = function (s) {
+    var t = trip();
+    return head(C.labelDate(s.date) + ' のひとこと') + '<div class="sheet-body"><form id="day-form" data-date="' + s.date + '">' +
+      '<label class="field"><span>この日の見出し（行き先や流れ）</span><input type="text" id="day-text" value="' + esc(t.dayTitles[s.date] || '') + '" placeholder="例：金沢 → 富山" autocomplete="off" data-autofocus></label></form></div>' +
+      '<div class="sheet-foot"><button type="button" class="btn" data-act="close">やめる</button><button type="submit" form="day-form" class="btn primary grow">保存する</button></div>';
+  };
+  SHEETS.menu = function () {
+    var t = trip(), h = head('メニュー') + '<div class="sheet-body"><ul class="menu">';
+    h += '<li><button type="button" data-act="trips">' + ic('cal') + '<span><b>旅行の一覧</b><small>切り替える・新しくつくる・複製する</small></span></button></li>';
+    if (t && Host.canEdit) h += '<li><button type="button" data-act="trip-edit">' + ic('gear') + '<span><b>この旅行の名前・日付・メモ</b><small>日数をふやす・日付をずらす</small></span></button></li>';
+    if (t) h += '<li><button type="button" data-act="share">' + ic('share') + '<span><b>共有・書き出し</b><small>文章でコピー、ファイルで渡す、バックアップ</small></span></button></li>';
+    if (t && !Host.artifact) h += '<li><button type="button" data-act="print">' + ic('print') + '<span><b>印刷する</b><small>日程をくわしい情報つきで紙に</small></span></button></li>';
+    if (canEdit() && UI.redo.length) h += '<li><button type="button" data-act="redo">' + ic('redo') + '<span><b>やり直す</b><small>「元に戻す」を取り消す</small></span></button></li>';
+    h += '<li><button type="button" data-act="help">' + ic('help') + '<span><b>使い方</b><small>予定の足し方・動かし方</small></span></button></li>';
+    return h + '</ul></div>';
+  };
+  SHEETS.share = function () {
+    var web = /^https?:$/.test(location.protocol) && !Host.artifact;
+    var h = head('共有・書き出し') + '<div class="sheet-body"><ul class="menu">';
+    h += '<li><button type="button" data-act="share-text">' + ic('text') + '<span><b>文章にしてコピー</b><small>LINE やメールにそのまま貼れる日程表</small></span></button></li>';
+    if (web) h += '<li><button type="button" data-act="share-link">' + ic('link') + '<span><b>共有リンクをコピー</b><small>ひらくと、この旅行がそのまま入るリンク</small></span></button></li>';
+    if (!Host.artifact) h += '<li><button type="button" data-act="share-ics">' + ic('cal') + '<span><b>カレンダーに入れる</b><small>.ics ファイル（iPhone・Google カレンダーで読み込める）</small></span></button></li>';
+    if (!Host.artifact || Host.downloads) {
+      h += '<li><button type="button" data-act="share-html">' + ic('html') + '<span><b>この旅行入りのファイルを書き出す</b><small>1つの HTML。受け取った人はブラウザでひらくだけ</small></span></button></li>';
+      h += '<li><button type="button" data-act="share-json">' + ic('save') + '<span><b>バックアップを保存</b><small>.json ファイル。あとで読み込める</small></span></button></li>';
+    }
+    if (Host.canEdit) h += '<li><label>' + ic('open') + '<span><b>バックアップを読み込む</b><small>.json ファイルから旅行を追加</small></span><input type="file" id="import-file" accept=".json,application/json" hidden></label></li>';
+    return h + '</ul></div>';
+  };
+  SHEETS.copy = function (s) {
+    return head(s.title || 'コピー') + '<div class="sheet-body"><p class="muted" style="margin-bottom:8px">' + esc(s.hint || '下の文章を長押し（または全選択）してコピーしてください。') + '</p>' +
+      '<textarea class="copybox" id="copybox" readonly>' + esc(s.text) + '</textarea></div>' +
+      '<div class="sheet-foot"><button type="button" class="btn primary grow" data-act="copy-box">' + ic('copy') + 'コピーする</button></div>';
+  };
+  SHEETS.confirm = function (s) {
+    return head(esc(s.title)) + '<div class="sheet-body"><p class="d-note">' + esc(s.text) + '</p></div>' +
+      '<div class="sheet-foot"><button type="button" class="btn grow" data-act="close">やめる</button><button type="button" class="btn grow ' + (s.danger ? 'danger' : 'primary') + '" data-act="confirm-ok">' + esc(s.ok) + '</button></div>';
+  };
+  SHEETS.help = function () {
+    return head('使い方') + '<div class="sheet-body help">' +
+      '<p>旅行の日程を、日ごとに時間順で並べるしおりです。予定を押すと、場所・電話・営業時間・予約番号などが見られます。</p>' +
+      '<h3>見る</h3><ul><li><b>日程</b>：時間順の一覧。上の「1日目」「2日目」で、その日に飛びます。</li><li><b>時間割</b>：カレンダーのように、時間の長さで見られます。</li><li><b>まとめ</b>：準備リスト、要確認、予約、宿、費用をひとまとめに。</li></ul>' +
+      (Host.canEdit ? '<h3>つくる・直す</h3><ul><li>右上を「編集中」にすると、右下の「＋ 予定」で追加できます。</li><li>予定を押して「編集」「ずらす」「複製」「削除」。ずらすときは、後ろの予定もまとめて動かせます。</li><li>時間割では、予定をドラッグ（スマホは長押ししてから）で移動、下のつまみで長さを変えられます。</li><li>まちがえたら、右上の矢印で元に戻せます。</li><li>旅行中は「見るだけ」にしておくと、うっかり動かす心配がありません。</li></ul>' : '') +
+      '<h3>ほかの人に渡す</h3><ul><li>メニューの「共有・書き出し」から、文章にしてコピーしたり、ファイルで渡したりできます。</li></ul>' +
+      '<h3>保存について</h3><p>' + (Host.artifact ? '編集した内容は、画面上の「みんなに反映する」を押すと保存され、このページを見ている人全員に反映されます。' : '内容はこのブラウザに自動で保存されます。別の端末に移すときは「共有・書き出し」のバックアップを使ってください。') + '</p></div>';
+  };
+
+  // ---------- お知らせ ----------
+  function toast(msg, actionLabel, action) {
+    var el = doc.createElement('div');
+    el.className = 'toast';
+    el.innerHTML = '<span>' + esc(msg) + '</span>' + (actionLabel ? '<button type="button">' + esc(actionLabel) + '</button>' : '');
+    $$('.toast', toastsEl).forEach(function (n) { n.remove(); });
+    toastsEl.appendChild(el);
+    var timer = setTimeout(function () { el.remove(); }, actionLabel ? 6000 : 2800);
+    if (actionLabel) $('button', el).addEventListener('click', function () { clearTimeout(timer); el.remove(); action(); });
+  }
+  function copyText(text, what) {
+    function fallback() { openSheet({ type: 'copy', title: (what || '文章') + 'をコピー', text: text }); }
+    try {
+      if (!navigator.clipboard || !navigator.clipboard.writeText) return fallback();
+      navigator.clipboard.writeText(text).then(function () { toast((what || '文章') + 'をコピーしました'); }, fallback);
+    } catch (e) { fallback(); }
+  }
+  function saveFile(name, text, mime) {
+    if (Host.artifact) {
+      if (!Host.downloads) return toast('この画面では、ファイルに保存できません');
+      Host.downloads.save({ filename: name, data: text }).then(function () { toast('保存しました'); }, function (e) { if (!e || e.code !== 'declined') toast('保存できませんでした'); });
+      return;
+    }
+    var a = doc.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type: mime }));
+    a.download = name;
+    doc.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+    toast('「' + name + '」を書き出しました');
+  }
+  function fileBase(t) { return (t.title || 'tabi').replace(/[\\/:*?"<>|\s]+/g, '_').slice(0, 40); }
+
+  // ---------- ページ自身をつくり直す（書き出し・アーティファクトの保存）----------
+  // アーティファクトの公開時に外側へ付く枠（2026-10-01 に公開済みのページから写したもの。tests/artifact-skeleton.json と同じ）。
+  // ページ自身が保存するときは、これとまったく同じ形の文書を作る。
+  var SKELETON = '<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>\n';
+  function getSources() {
+    var css = doc.getElementById('tabi-css'), js = doc.getElementById('tabi-js');
+    if (css && js) return Promise.resolve({ css: css.textContent, js: js.textContent });
+    // 開発用（ファイルが分かれている）：その場で読み込んで1つにする
+    return Promise.all(['css/app.css', 'js/core.js', 'js/app.js'].map(function (u) { return fetch(u).then(function (r) { if (!r.ok) throw new Error(u); return r.text(); }); }))
+      .then(function (a) { return { css: a[0], js: a[1] + '\n' + a[2] }; });
+  }
+  function buildDocument(trips, src) {
+    var data = JSON.stringify({ trips: trips }).replace(/</g, '\\u003c');
+    return SKELETON + '<title>' + APP_TITLE + '</title>\n<style id="tabi-css">' + src.css + '</style>\n<div id="app"></div>\n' +
+      '<script type="application/json" id="tabi-data">' + data + '<\/script>\n<script id="tabi-js">' + src.js + '<\/script>\n\n</body></html>';
+  }
+  function publish() {
+    if (!Host.api || Host.busy) return;
+    Host.busy = true;
+    renderBanner();
+    stashUI();
+    getSources().then(function (src) { return Host.api.publish(buildDocument(D.trips, src)); }).then(function () {
+      // 成功するとページが読み込み直される。読み込み直しの前にここへ来たら、下書きを片づける
+      Host.publishedJson = JSON.stringify(D.trips); Host.baseHash = hash(Host.publishedJson); Host.stale = false; Host.busy = false;
+      persist();
+      renderBanner();
+      toast('保存しました。みんなの画面に反映されます');
+    }, function (e) {
+      Host.busy = false;
+      var code = e && e.code;
+      if (code === 'not_writer' || code === 'not_granted' || code === 'not_declared' || code === 'capability_disabled') {
+        Host.canEdit = false; render(); toast('このページは見るだけの設定です。保存はできません');
+      } else if (code === 'conflict') { toast('ほかの人が先に保存しました。最新の内容を読み込み直します'); }
+      else if (code === 'rate_limited') { renderBanner(); toast('保存が続いています。少し待ってからもう一度押してください'); }
+      else { renderBanner(); toast('保存できませんでした。通信を確かめて、もう一度押してください'); }
+    });
+  }
+
+  // ---------- 共有リンク ----------
+  function b64url(bytes) {
+    var s = '';
+    for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function unb64url(str) {
+    var s = atob(str.replace(/-/g, '+').replace(/_/g, '/')), out = new Uint8Array(s.length);
+    for (var i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+    return out;
+  }
+  function encodeShare(t) {
+    var json = JSON.stringify(t);
+    if (window.CompressionStream) {
+      try {
+        var cs = new Blob([json]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+        return new Response(cs).arrayBuffer().then(function (buf) { return 'z' + b64url(new Uint8Array(buf)); });
+      } catch (e) { /* 圧縮できなければそのまま */ }
+    }
+    return Promise.resolve('j' + b64url(new TextEncoder().encode(json)));
+  }
+  function decodeShare(code) {
+    var bytes = unb64url(code.slice(1));
+    if (code.charAt(0) === 'z') {
+      var ds = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+      return new Response(ds).text().then(JSON.parse);
+    }
+    return Promise.resolve(JSON.parse(new TextDecoder().decode(bytes)));
+  }
+  function takeShared(raw, label) {
+    var t = C.normTrip(raw), i = D.trips.findIndex(function (x) { return x.id === t.id; });
+    if (i >= 0 && D.trips[i].updatedAt > t.updatedAt) { D.cur = t.id; persist(); render(); toast('手元の「' + t.title + '」のほうが新しいので、そのままにしました'); return; }
+    if (i >= 0 && D.trips[i].updatedAt === t.updatedAt) { D.cur = t.id; persist(); render(); toast('「' + t.title + '」を表示しました'); return; }
+    var before = snapshot();
+    if (i >= 0) D.trips[i] = t; else D.trips.push(t);
+    delete D.removed[t.id];
+    D.cur = t.id;
+    UI.undo.push(before); UI.redo = [];
+    persist(); render();
+    toast((label || '共有された') + '「' + t.title + '」を' + (i >= 0 ? '新しい内容に入れ替えました' : '追加しました'), '元に戻す', undo);
+  }
+  function readHash() {
+    if (Host.artifact) return;
+    var m = /[#&]t=([zj][\w-]+)/.exec(location.hash);
+    if (!m) return;
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* file:// では失敗してもよい */ }
+    decodeShare(m[1]).then(function (raw) { takeShared(raw); }, function () { toast('共有リンクを読み取れませんでした'); });
+  }
+
+  // ---------- 操作 ----------
+  var ACT = {
+    close: function () { closeSheet(); },
+    tab: function (el) { UI.tab = el.dataset.tab; stashUI(); render(); mainEl.focus({ preventScroll: true }); },
+    mode: function () { D.prefs.edit = !D.prefs.edit; persist(); render(); toast(D.prefs.edit ? '編集できます' : '見るだけの表示にしました'); },
+    undo: undo,
+    redo: function () { closeAll(); redo(); },
+    menu: function () { openSheet({ type: 'menu' }); },
+    help: function () { UI.sheets = []; openSheet({ type: 'help' }); },
+    trips: function () { UI.sheets = []; openSheet({ type: 'trips' }); },
+    share: function () { UI.sheets = []; openSheet({ type: 'share' }); },
+    print: function () { closeAll(); UI.tab = 'list'; render(); setTimeout(function () { window.print(); }, 60); },
+    jump: function (el) {
+      var date = el.dataset.date;
+      UI.day = date; UI.jumpLock = Date.now() + 900;
+      spy();
+      if (UI.tab === 'list') { var sec = $('.day[data-date="' + date + '"]', mainEl); if (sec) mainEl.scrollTo({ top: sec.offsetTop, behavior: 'smooth' }); }
+      else { var col = $('.g-col[data-date="' + date + '"]', mainEl); if (col) mainEl.scrollTo({ left: col.offsetLeft - 44, behavior: 'smooth' }); }
+    },
+    zoom: function (el) {
+      var steps = [0.7, 1, 1.4, 1.9], i = steps.indexOf(D.prefs.zoom); if (i < 0) i = 1;
+      var j = Math.max(0, Math.min(steps.length - 1, i + (+el.dataset.d)));
+      if (j === i) return;
+      var mid = (mainEl.scrollTop + mainEl.clientHeight / 2) / G.H;
+      D.prefs.zoom = steps[j]; persist(); renderMain();
+      mainEl.scrollTop = mid * G.H - mainEl.clientHeight / 2;
+    },
+    open: function (el) { openSheet({ type: 'detail', id: el.dataset.id }); },
+    'open-rel': function (el) { if (!el.dataset.id) return; UI.sheets[UI.sheets.length - 1] = { type: 'detail', id: el.dataset.id }; drawSheet(true); },
+    add: function (el) { if (!canEdit()) return; openNew(el.dataset.date, el.dataset.start, el.dataset.end); },
+    edit: function (el) { var ev = findEv(el.dataset.id); if (ev) openSheet({ type: 'form', isNew: false, ev: JSON.parse(JSON.stringify(ev)) }); },
+    del: function (el) {
+      var ev = findEv(el.dataset.id); if (!ev) return;
+      UI.sheets = [];
+      commit('「' + ev.title + '」を削除しました', function () { var t = trip(); t.events = t.events.filter(function (e) { return e.id !== ev.id; }); });
+      drawSheet(false);
+    },
+    dup: function (el) {
+      var ev = findEv(el.dataset.id); if (!ev) return;
+      var c = JSON.parse(JSON.stringify(ev)); c.id = C.newId('e'); c.title = ev.title + '（コピー）'; c.reserve = c.reserve === 'done' ? 'todo' : c.reserve; c.reserveNo = '';
+      UI.sheets = []; UI.flash = c.id;
+      commit('複製しました。日にちや時刻を直してください', function () { trip().events.push(c); });
+      openSheet({ type: 'form', isNew: false, ev: JSON.parse(JSON.stringify(c)) });
+    },
+    reserve: function (el) {
+      var ev = findEv(el.dataset.id); if (!ev) return;
+      commit(el.dataset.v === 'done' ? '予約済みにしました' : '未予約に戻しました', function () { ev.reserve = el.dataset.v; });
+    },
+    'shift-open': function (el) { openSheet({ type: 'shift', id: el.dataset.id, follow: false }); },
+    shift: function (el) {
+      var ev = findEv(el.dataset.id), m = +el.dataset.m, s = UI.sheets[UI.sheets.length - 1];
+      if (!ev) return;
+      var follow = $('#shift-follow') && $('#shift-follow').checked;
+      s.follow = follow;
+      var t = trip(), s0 = C.toMin(ev.start);
+      var group = follow ? t.events.filter(function (e) { return e.date === ev.date && !e.allDay && C.toMin(e.start) != null && C.toMin(e.start) >= s0; }) : [ev];
+      // みんな同じ幅だけ動かす（端にぶつかるなら、動かせる分だけ）
+      var d = m;
+      group.forEach(function (e) { var x = C.toMin(e.start); d = m > 0 ? Math.min(d, 1435 - x) : Math.max(d, -x); });
+      if (!d) return toast('これ以上は動かせません');
+      commit((d > 0 ? d + '分 遅らせました' : (-d) + '分 早めました') + (group.length > 1 ? '（' + group.length + '件）' : ''), function () { group.forEach(function (e) { C.shiftEvent(e, d); }); });
+    },
+    dur: function (el) {
+      var f = $('#ev-form'), s = C.toMin(f.elements.start.value), m = +el.dataset.m;
+      if (!m) { f.elements.end.value = ''; return; }
+      if (s == null) { toast('先に開始の時刻を入れてください'); f.elements.start.focus(); return; }
+      f.elements.end.value = C.fromMin(Math.min(1439, s + m));
+    },
+    'place-add': function () {
+      var box = $('#f-places'), n = $$('.place-f', box).length, tmp = doc.createElement('div');
+      tmp.innerHTML = placeFieldHTML({}, n);
+      box.appendChild(tmp.firstChild);
+      $('#place-add-label').textContent = '候補をもう1つ足す';
+      var first = $('[data-k="name"]', box.lastChild); if (first) first.focus();
+    },
+    'place-del': function (el) {
+      var box = $('#f-places'); el.closest('.place-f').remove();
+      $$('.place-n', box).forEach(function (n, i) { n.textContent = '場所 ' + (i + 1); });
+      if (!$$('.place-f', box).length) $('#place-add-label').textContent = '場所を入れる';
+    },
+    'day-title': function (el) { openSheet({ type: 'day-title', date: el.dataset.date }); },
+    'add-day': function () {
+      var t = trip();
+      if (C.tripDays(t).length >= C.MAX_DAYS) return toast('日数は' + C.MAX_DAYS + '日までです');
+      commit('1日ふやしました', function () { t.endDate = C.addDays(t.endDate, 1); });
+      mainEl.scrollTop = mainEl.scrollHeight;
+    },
+    'todo-del': function (el) { commit('準備リストから消しました', function () { var t = trip(); t.todos = t.todos.filter(function (x) { return x.id !== el.dataset.id; }); }); },
+    copy: function (el) { copyText(el.dataset.text, el.dataset.what); },
+    'copy-box': function () { var b = $('#copybox'); b.focus(); b.select(); copyText(b.value, '文章'); },
+    'trip-pick': function (el) { D.cur = el.dataset.id; UI.undo = []; UI.redo = []; UI.sheets = []; mainEl.dataset.trip = ''; persist(); stashUI(); render(); drawSheet(false); },
+    'trip-new': function () { UI.sheets = []; openSheet({ type: 'trip-form', id: '' }); },
+    'trip-edit': function () { UI.sheets = []; openSheet({ type: 'trip-form', id: D.cur }); },
+    'trip-dup': function (el) {
+      var src = D.trips.filter(function (x) { return x.id === el.dataset.id; })[0]; if (!src) return;
+      var c = JSON.parse(JSON.stringify(src)); c.id = C.newId('t'); c.title = src.title + '（コピー）';
+      c.events.forEach(function (e) { e.id = C.newId('e'); }); c.todos.forEach(function (x) { x.id = C.newId('c'); });
+      UI.sheets = [];
+      commit('旅行を複製しました', function () { D.trips.push(c); D.cur = c.id; });
+      drawSheet(false);
+    },
+    'trip-del': function (el) {
+      var t = D.trips.filter(function (x) { return x.id === el.dataset.id; })[0]; if (!t) return;
+      openSheet({ type: 'confirm', title: '旅行を削除しますか？', text: '「' + t.title + '」と、その予定 ' + t.events.length + '件を削除します。直後なら「元に戻す」で取り消せます。', ok: '削除する', danger: true, run: function () {
+        UI.sheets = [];
+        var before = snapshot();
+        D.trips = D.trips.filter(function (x) { return x.id !== t.id; });
+        D.removed[t.id] = new Date().toISOString();
+        if (D.cur === t.id) D.cur = pickDefaultTrip();
+        UI.undo.push(before); UI.redo = [];
+        persist(); render(); drawSheet(false);
+        toast('「' + t.title + '」を削除しました', '元に戻す', undo);
+      } });
+    },
+    'confirm-ok': function () { var s = UI.sheets[UI.sheets.length - 1]; if (s && s.run) s.run(); },
+    'share-text': function () { copyText(C.tripToText(trip()), '日程の文章'); },
+    'share-link': function () {
+      encodeShare(trip()).then(function (code) {
+        var url = location.origin + location.pathname + '#t=' + code;
+        if (url.length > 60000) return toast('内容が多すぎてリンクにできません。ファイルで渡してください');
+        copyText(url, '共有リンク');
+      });
+    },
+    'share-ics': function () { var t = trip(); saveFile(fileBase(t) + '.ics', C.tripToICS(t), 'text/calendar'); },
+    'share-json': function () { var t = trip(); saveFile(fileBase(t) + '.json', JSON.stringify({ app: 'tabi-shiori', version: 1, trips: [t] }, null, 2), 'application/json'); },
+    'share-html': function () {
+      var t = trip();
+      getSources().then(function (src) {
+        var reset = 'html{box-sizing:border-box;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}';
+        var html = buildDocument([t], src).replace(SKELETON, '<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>' + reset + '</style></head><body>');
+        saveFile(fileBase(t) + '.html', html, 'text/html');
+      }, function () { toast('書き出せませんでした'); });
+    },
+    publish: publish,
+    discard: function () {
+      openSheet({ type: 'confirm', title: '変更を捨てますか？', text: 'この端末でまだ保存していない変更をすべて捨てて、保存されている最新の内容に戻します。', ok: '捨てる', danger: true, run: function () {
+        D.trips = JSON.parse(Host.publishedJson); Host.stale = false; UI.undo = []; UI.redo = []; UI.sheets = [];
+        if (!trip()) D.cur = pickDefaultTrip();
+        persist(); render(); drawSheet(false); toast('保存されている内容に戻しました');
+      } });
+    }
+  };
+
+  var SUBMIT = {
+    'ev-form': function () {
+      var s = UI.sheets[UI.sheets.length - 1], ev = readForm(s);
+      if (!ev) return;
+      UI.sheets.pop();
+      UI.flash = ev.id;
+      commit(s.isNew ? '「' + ev.title + '」を追加しました' : '保存しました', function () {
+        var t = trip(), i = t.events.findIndex(function (e) { return e.id === ev.id; });
+        if (i >= 0) t.events[i] = ev; else t.events.push(ev);
+      });
+      drawSheet(false);
+    },
+    'trip-form': function (f) {
+      var id = f.dataset.id, title = f.elements.title.value.trim(), start = f.elements.start.value, end = f.elements.end.value, err = $('#t-err'), msg = '';
+      var t = id ? D.trips.filter(function (x) { return x.id === id; })[0] : null;
+      var move = t && f.elements.move && f.elements.move.checked ? C.diffDays(t.startDate, start) : 0;
+      if (!title) { msg = '旅行の名前を入れてください。'; f.elements.title.focus(); }
+      else if (!C.isIso(start) || !C.isIso(end)) msg = '出発の日と帰る日を入れてください。';
+      else if (end < start) msg = '帰る日が、出発の日より前になっています。';
+      else if (C.diffDays(start, end) + 1 > C.MAX_DAYS) msg = '日数は' + C.MAX_DAYS + '日までです。';
+      else if (t) {
+        var out = t.events.filter(function (e) { var d = C.addDays(e.date, move); return d < start || d > end; }).length;
+        if (out) msg = 'この日付にすると、予定 ' + out + '件が日程の外に出てしまいます。先に予定を動かすか、日付を広げてください。';
+      }
+      err.textContent = msg; err.hidden = !msg;
+      if (msg) return;
+      UI.sheets = [];
+      if (t) {
+        commit('旅行の情報を保存しました', function () {
+          if (move) {
+            t.events.forEach(function (e) { e.date = C.addDays(e.date, move); });
+            var dt = {}; Object.keys(t.dayTitles).forEach(function (k) { dt[C.addDays(k, move)] = t.dayTitles[k]; }); t.dayTitles = dt;
+          }
+          t.title = title; t.startDate = start; t.endDate = end; t.note = f.elements.note.value.trim();
+        });
+      } else {
+        var nt = C.normTrip({ title: title, startDate: start, endDate: end, note: f.elements.note.value.trim() });
+        mainEl.dataset.trip = '';
+        commit('「' + title + '」をつくりました。右下の「＋ 予定」から足していけます', function () { D.trips.push(nt); D.cur = nt.id; D.prefs.edit = true; UI.tab = 'list'; });
+      }
+      drawSheet(false);
+    },
+    'day-form': function (f) {
+      var date = f.dataset.date, v = $('#day-text').value.trim();
+      UI.sheets.pop();
+      commit(null, function () { var t = trip(); if (v) t.dayTitles[date] = v; else delete t.dayTitles[date]; });
+      drawSheet(false);
+    },
+    'todo-form': function () {
+      var inp = $('#todo-text'), v = inp.value.trim();
+      if (!v) return inp.focus();
+      commit(null, function () { trip().todos.push({ id: C.newId('c'), text: v, done: false }); });
+      var again = $('#todo-text'); if (again) again.focus();
+    }
+  };
+
+  // ---------- 時間割のドラッグ ----------
+  var drag = null, tipEl = null;
+  function colAt(x) {
+    var cols = $$('.g-col', mainEl), hit = null;
+    cols.forEach(function (c) { var r = c.getBoundingClientRect(); if (x >= r.left && x < r.right) hit = c; });
+    if (!hit && cols.length) hit = x < cols[0].getBoundingClientRect().left ? cols[0] : cols[cols.length - 1];
+    return hit;
+  }
+  function dragStart() {
+    drag.active = true;
+    drag.el.classList.add('dragging');
+    drag.scroll0 = mainEl.scrollTop;
+    try { drag.el.setPointerCapture(drag.pid); } catch (e) { /* なくても動く */ }
+    if (drag.touch && navigator.vibrate) navigator.vibrate(12);
+    tipEl = doc.createElement('div');
+    tipEl.className = 'g-tip num';
+    doc.body.appendChild(tipEl);
+    dragMove(drag.x0, drag.y0);
+  }
+  function dragCalc(x, y) {
+    var ppm = G.H / 60, dy = (y - drag.y0) + (mainEl.scrollTop - drag.scroll0);
+    var dm = Math.round(dy / ppm / 5) * 5, len = drag.e0 - drag.s0;
+    if (drag.resize) {
+      var e = Math.max(drag.s0 + 5, Math.min(1439, drag.e0 + dm));
+      return { s: drag.s0, e: e, date: drag.date0 };
+    }
+    var s = Math.max(0, Math.min(1435, drag.s0 + dm));
+    var col = colAt(x);
+    return { s: s, e: Math.min(1439, s + len), date: col ? col.dataset.date : drag.date0, col: col };
+  }
+  function dragMove(x, y) {
+    var r = dragCalc(x, y), ppm = G.H / 60;
+    drag.last = r;
+    if (drag.resize) drag.el.style.height = Math.max(20, (r.e - r.s) * ppm - 2) + 'px';
+    else {
+      var dx = r.col && r.col !== drag.col0 ? r.col.getBoundingClientRect().left - drag.col0.getBoundingClientRect().left : 0;
+      drag.el.style.transform = 'translate(' + dx + 'px,' + ((r.s - drag.s0) * ppm) + 'px)';
+    }
+    tipEl.textContent = C.fromMin(r.s) + (drag.hasEnd || drag.resize ? '–' + C.fromMin(r.e) : '');
+    tipEl.style.left = x + 'px'; tipEl.style.top = y + 'px';
+    // 画面の端に近づいたら自動でスクロール
+    var box = mainEl.getBoundingClientRect();
+    if (y > box.bottom - 40) mainEl.scrollTop += 12; else if (y < box.top + 70) mainEl.scrollTop -= 12;
+  }
+  function dragEnd(apply) {
+    var d = drag;
+    drag = null;
+    if (!d) return;
+    clearTimeout(d.timer);
+    if (tipEl) { tipEl.remove(); tipEl = null; }
+    if (!d.active) return;
+    // ドラッグを離した直後に出る「クリック」だけを無視する（時間割の中だけ。元に戻すボタンなどは止めない）
+    UI.suppressClick = true;
+    setTimeout(function () { UI.suppressClick = false; }, 120);
+    d.el.classList.remove('dragging');
+    var r = d.last, ev = findEv(d.id);
+    var changed = apply && r && ev && (r.s !== d.s0 || r.e !== d.e0 || r.date !== d.date0);
+    if (!changed) { d.el.style.transform = ''; if (d.resize) renderMain(); return; }
+    UI.flash = '';
+    commit('「' + ev.title + '」を ' + (r.date !== d.date0 ? C.shortDate(r.date) + ' ' : '') + C.fromMin(r.s) + (d.hasEnd || d.resize ? '–' + C.fromMin(r.e) : '') + ' にしました', function () {
+      ev.date = r.date; ev.start = C.fromMin(r.s);
+      if (d.hasEnd || d.resize) ev.end = C.fromMin(r.e);
+    });
+  }
+  function onPointerDown(e) {
+    if (UI.tab !== 'grid' || !canEdit() || drag) return;
+    var el = e.target.closest && e.target.closest('.g-ev');
+    if (!el || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    var ev = findEv(el.dataset.id);
+    if (!ev || ev.allDay || !ev.start) return;
+    var s = C.toMin(ev.start), en = C.endMin(ev);
+    drag = {
+      id: ev.id, el: el, pid: e.pointerId, x0: e.clientX, y0: e.clientY, touch: e.pointerType !== 'mouse', active: false,
+      resize: !!e.target.closest('.g-grip'), s0: s, e0: en == null ? s + 30 : Math.min(1439, en), hasEnd: en != null, date0: ev.date, col0: el.closest('.g-col'), scroll0: mainEl.scrollTop
+    };
+    if (drag.touch && !drag.resize) drag.timer = setTimeout(function () { if (drag && !drag.active) dragStart(); }, 330);
+    if (drag.resize) e.preventDefault();
+  }
+  function onPointerMove(e) {
+    if (!drag || e.pointerId !== drag.pid) return;
+    var dist = Math.abs(e.clientX - drag.x0) + Math.abs(e.clientY - drag.y0);
+    if (!drag.active) {
+      if (drag.touch && !drag.resize) { if (dist > 10) dragEnd(false); return; }
+      if (dist < 5) return;
+      dragStart();
+    }
+    e.preventDefault();
+    dragMove(e.clientX, e.clientY);
+  }
+
+  // ---------- イベントの取り付け ----------
+  function bind() {
+    app.addEventListener('click', function (e) {
+      if (UI.suppressClick && mainEl.contains(e.target)) { UI.suppressClick = false; e.preventDefault(); return; }
+      var el = e.target.closest('[data-act]');
+      if (el && !el.disabled) {
+        if (el.tagName !== 'A') e.preventDefault();
+        var fn = ACT[el.dataset.act];
+        if (fn) fn(el, e);
+        return;
+      }
+      if (e.target === scrimEl) return closeSheet();
+      // 時間割のあいている所を押したら、その時刻で追加
+      var col = e.target.classList && e.target.classList.contains('g-col') ? e.target : null;
+      if (col && canEdit()) {
+        var m = (e.clientY - col.getBoundingClientRect().top) / G.H * 60 + G.lo * 60;
+        m = Math.max(0, Math.min(1380, Math.floor(m / 30) * 30));
+        openNew(col.dataset.date, C.fromMin(m), C.fromMin(m + 60));
+      }
+    }, false);
+    app.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var fn = SUBMIT[e.target.id];
+      if (fn) fn(e.target);
+    });
+    app.addEventListener('change', function (e) {
+      var el = e.target;
+      if (el.dataset && el.dataset.change === 'todo') {
+        var id = el.dataset.id, on = el.checked;
+        commit(null, function () { var x = trip().todos.filter(function (y) { return y.id === id; })[0]; if (x) x.done = on; });
+      } else if (el.id === 'import-file' && el.files && el.files[0]) {
+        var fr = new FileReader();
+        fr.onload = function () {
+          try {
+            var o = JSON.parse(fr.result), list = Array.isArray(o.trips) ? o.trips : (o.events ? [o] : []);
+            if (!list.length) throw new Error('empty');
+            UI.sheets = []; drawSheet(false);
+            list.forEach(function (raw) { takeShared(raw, '読み込んだ'); });
+          } catch (err) { toast('このファイルは読み込めませんでした（たびしおりのバックアップではないようです）'); }
+        };
+        fr.readAsText(el.files[0]);
+      }
+    });
+    mainEl.addEventListener('scroll', function () { if (!spy.t) spy.t = setTimeout(function () { spy.t = 0; spy(); }, 80); }, { passive: true });
+    mainEl.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
+    window.addEventListener('pointerup', function (e) { if (drag && e.pointerId === drag.pid) dragEnd(true); });
+    window.addEventListener('pointercancel', function (e) { if (drag && e.pointerId === drag.pid) dragEnd(false); });
+    // 長押しでつかんだあとは、画面のスクロールを止める
+    mainEl.addEventListener('touchmove', function (e) { if (drag && drag.active) e.preventDefault(); }, { passive: false });
+    mainEl.addEventListener('contextmenu', function (e) { if (drag || (e.target.closest && e.target.closest('.g-ev') && canEdit() && 'ontouchstart' in window)) e.preventDefault(); });
+    doc.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { if (drag) return dragEnd(false); if (UI.sheets.length) { e.preventDefault(); closeSheet(); } return; }
+      var typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target.tagName || ''));
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !typing && canEdit()) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
+    });
+    window.addEventListener('pagehide', stashUI);
+    // スマホでキーボードが出たとき、入力フォームがキーボードの下に隠れないようにする
+    var vv = window.visualViewport;
+    if (vv) {
+      var fit = function () {
+        var hidden = window.innerHeight - (vv.offsetTop + vv.height);
+        if (Math.abs(vv.scale - 1) < 0.01 && hidden > 80 && window.innerWidth < 900) { sheetEl.style.bottom = Math.round(hidden) + 'px'; sheetEl.style.maxHeight = Math.round(vv.height - 12) + 'px'; }
+        else { sheetEl.style.bottom = ''; sheetEl.style.maxHeight = ''; }
+      };
+      vv.addEventListener('resize', fit);
+      vv.addEventListener('scroll', fit);
+    }
+    setInterval(function () { if (!UI.sheets.length && !drag && trip() && phase(trip()).k === 'during' && UI.tab !== 'sum') renderMain(); }, 60000);
+  }
+
+  // ---------- 起動 ----------
+  function connectHost() {
+    if (!Host.artifact) return;
+    var c = window.claude;
+    Promise.all([c.use('artifact'), c.use('user'), c.use('downloads')]).then(function (r) {
+      Host.api = r[0]; Host.downloads = r[2];
+      return r[0] && r[1] ? r[1].canEdit() : false;
+    }).then(function (ok) {
+      if (!ok) return;
+      Host.canEdit = true;
+      applyDraft();
+      persist();
+      render();
+    }, function () { /* 見るだけのまま */ });
+  }
+  function boot() {
+    buildShell();
+    load();
+    bind();
+    render();
+    readHash();
+    connectHost();
+    window.addEventListener('hashchange', readHash);
+  }
+  // テスト用の入口（画面からは使わない）
+  window.TabiApp = { state: function () { return { D: D, UI: UI, Host: Host, G: G }; }, render: function () { render(); }, buildDocument: buildDocument, getSources: getSources, encodeShare: encodeShare };
+  if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', boot); else boot();
+})();
+</script>
+</body></html>
